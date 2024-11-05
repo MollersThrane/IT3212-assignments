@@ -38,11 +38,11 @@ def lag_features(df, lags):
     for lag in lags:
         print(f"Lag {lag}...")
 
-        feature_dict[f'Open_Lag_{lag}'] = df['Open'].shift(lag).fillna(method='bfill')
-        feature_dict[f'High_Lag_{lag}'] = df['High'].shift(lag).fillna(method='bfill')
-        feature_dict[f'Low_Lag_{lag}'] = df['Low'].shift(lag).fillna(method='bfill')
-        feature_dict[f'Close_Lag_{lag}'] = df['Close'].shift(lag).fillna(method='bfill')
-        feature_dict[f'Volume_Lag_{lag}'] = df['Volume'].shift(lag).fillna(method='bfill')
+        feature_dict[f'Open_Lag_{lag}'] = df['Open'].shift(lag).bfill()
+        feature_dict[f'High_Lag_{lag}'] = df['High'].shift(lag).bfill()
+        feature_dict[f'Low_Lag_{lag}'] = df['Low'].shift(lag).bfill()
+        feature_dict[f'Close_Lag_{lag}'] = df['Close'].shift(lag).bfill()
+        feature_dict[f'Volume_Lag_{lag}'] = df['Volume'].shift(lag).bfill()
 
     # Convert dictionary to DataFrame and concatenate with original
     features_df = pd.DataFrame(feature_dict, index=df.index)
