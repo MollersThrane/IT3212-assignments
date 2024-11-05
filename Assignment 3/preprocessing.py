@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 import os
 
 
@@ -12,10 +11,7 @@ def read_file(filepath):
 
 def gather_data():    
     path = "./IT3212-assignments/Assignment 1/Stocks/"
-    # file = "evtc.us.txt"
-    # filepaths = [path+f for f in os.listdir(path) if f.endswith('aaap.us.txt')]
     filepaths = [path+f for f in os.listdir(path)]
-    # filepaths = [path+file]
     df = pd.concat(map(read_file, filepaths))
 
     return df
@@ -62,7 +58,6 @@ def statistical_features(df):
     and year (stock market days in a year).
     - Mean
     - Absolute deviation
-    - Volatility
     - Standard deviation
     """
     print("Creating statistical features for...")
@@ -86,13 +81,10 @@ def statistical_features(df):
             rolling_mean = df[column].rolling(window=window, min_periods=0).mean()
             abs_deviation = (df[column] - rolling_mean).abs().rolling(window=window, min_periods=0).mean()
             feature_dict[f'{column}_AbsDev_{suffix}'] = abs_deviation
-        # feature_dict[f'{column}_AbsDev_Week'] = df[column].rolling(window=5).apply(lambda x: np.mean(np.abs(x - np.mean(x))))
-        # feature_dict[f'{column}_AbsDev_Month'] = df[column].rolling(window=25).apply(lambda x: np.mean(np.abs(x - np.mean(x))))
-        # feature_dict[f'{column}_AbsDev_Quarter'] = df[column].rolling(window=63).apply(lambda x: np.mean(np.abs(x - np.mean(x))))
-        # feature_dict[f'{column}_AbsDev_Year'] = df[column].rolling(window=252).apply(lambda x: np.mean(np.abs(x - np.mean(x))))
 
         # Calculate the standard deviation
         print("Calculating standard deviation...")
+        # Uses backfilling to fill NaN values, as the first values will be NaN
         feature_dict[f'{column}_Std_Week'] = df[column].rolling(window=5, min_periods=0).std().fillna(method='bfill')
         feature_dict[f'{column}_Std_Month'] = df[column].rolling(window=25, min_periods=0).std().fillna(method='bfill')
         feature_dict[f'{column}_Std_Quarter'] = df[column].rolling(window=63, min_periods=0).std().fillna(method='bfill')
@@ -119,7 +111,7 @@ def extract_features(df):
 
 df = gather_data()
 df = extract_features(df)
-print(df.head())
+# print(df.head())
 
 # Save the preprocessed data to a CSV file
 df.to_csv('./preprocessed_stock_data.csv', index=False)
