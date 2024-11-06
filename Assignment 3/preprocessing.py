@@ -85,10 +85,10 @@ def statistical_features(df):
         # Calculate the standard deviation
         print("Calculating standard deviation...")
         # Uses backfilling to fill NaN values, as the first values will be NaN
-        feature_dict[f'{column}_Std_Week'] = df[column].rolling(window=5, min_periods=0).std().fillna(method='bfill')
-        feature_dict[f'{column}_Std_Month'] = df[column].rolling(window=25, min_periods=0).std().fillna(method='bfill')
-        feature_dict[f'{column}_Std_Quarter'] = df[column].rolling(window=63, min_periods=0).std().fillna(method='bfill')
-        feature_dict[f'{column}_Std_Year'] = df[column].rolling(window=252, min_periods=0).std().fillna(method='bfill')
+        feature_dict[f'{column}_Std_Week'] = df[column].rolling(window=5, min_periods=0).std().bfill()
+        feature_dict[f'{column}_Std_Month'] = df[column].rolling(window=25, min_periods=0).std().bfill()
+        feature_dict[f'{column}_Std_Quarter'] = df[column].rolling(window=63, min_periods=0).std().bfill()
+        feature_dict[f'{column}_Std_Year'] = df[column].rolling(window=252, min_periods=0).std().bfill()
 
     # Convert dictionary to DataFrame and concatenate with original
     features_df = pd.DataFrame(feature_dict, index=df.index)
@@ -114,4 +114,5 @@ df = extract_features(df)
 # print(df.head())
 
 # Save the preprocessed data to a CSV file
+print("Saving preprocessed data to 'preprocessed_stock_data.csv'...")
 df.to_csv('./preprocessed_stock_data.csv', index=False)
