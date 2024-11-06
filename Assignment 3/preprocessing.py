@@ -17,13 +17,26 @@ def gather_data():
     return df
 
 def seasonal_features(df):
+    """
+    Extract the following seasonal features from the date column of the dataset:
+    - Day of year
+    - Day of month
+    - Day of week
+    - Week-number
+    - Month
+    - Year
+    - Quartile
+    """
+
     print("Creating seasonal features...")
     # Extract seasonal features
     df['Date'] = pd.to_datetime(df['Date'])
-    df['Year'] = df['Date'].dt.year
+    df['DayOfYear'] = df['Date'].dt.dayofyear
+    df['DayOfMonth'] = df['Date'].dt.day
+    df['DayOfWeek'] = df['Date'].dt.dayofweek
+    df['WeekNumber'] = df['Date'].dt.week
     df['Month'] = df['Date'].dt.month
-    df['Day'] = df['Date'].dt.day
-    df['Weekday'] = df['Date'].dt.weekday
+    df['Year'] = df['Date'].dt.year
     df['Quarter'] = df['Date'].dt.quarter
 
     return df
