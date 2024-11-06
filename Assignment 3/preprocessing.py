@@ -1,7 +1,6 @@
 import pandas as pd
 import os
 
-
 def read_file(filepath):
     try:
         return pd.read_csv(filepath)
@@ -9,8 +8,12 @@ def read_file(filepath):
         print(f"Error: The file {filepath} does not contain any columns.")
         return pd.DataFrame()  # Return an empty DataFrame if the file is empty
 
-def gather_data():    
-    path = "./IT3212-assignments/Assignment 1/Stocks/"
+def get_filepaths() -> list[str]:
+    path = "./Stocks/"
+    return [path+f for f in os.listdir(path)]
+
+def gather_data(path: str):    
+    path = "./Stocks/"
     filepaths = [path+f for f in os.listdir(path)]
     df = pd.concat(map(read_file, filepaths))
 
@@ -28,13 +31,13 @@ def seasonal_features(df):
     - Quartile
     """
 
-    print("Creating seasonal features...")
+    # print("Creating seasonal features...")
     # Extract seasonal features
     df['Date'] = pd.to_datetime(df['Date'])
     df['DayOfYear'] = df['Date'].dt.dayofyear
     df['DayOfMonth'] = df['Date'].dt.day
     df['DayOfWeek'] = df['Date'].dt.dayofweek
-    df['WeekNumber'] = df['Date'].dt.week
+    df['WeekNumber'] = df['Date'].dt.isocalendar().week
     df['Month'] = df['Date'].dt.month
     df['Year'] = df['Date'].dt.year
     df['Quarter'] = df['Date'].dt.quarter
@@ -44,12 +47,12 @@ def seasonal_features(df):
 def lag_features(df, lags):
     # Create lag features of open, high, low, close, and volume
 
-    print("Creating lag features for...")
+    # print("Creating lag features for...")
 
     feature_dict = {}
 
     for lag in lags:
-        print(f"Lag {lag}...")
+        # print(f"Lag {lag}...")
 
         feature_dict[f'Open_Lag_{lag}'] = df['Open'].shift(lag).bfill()
         feature_dict[f'High_Lag_{lag}'] = df['High'].shift(lag).bfill()
@@ -73,30 +76,30 @@ def statistical_features(df):
     - Absolute deviation
     - Standard deviation
     """
-    print("Creating statistical features for...")
+    # print("Creating statistical features for...")
 
     columns = ['Open', 'High', 'Low', 'Close', 'Volume']
 
     for column in columns:
         feature_dict = {}
-        print(f"Column '{column}'...")
+        # print(f"Column '{column}'...")
 
         # Calculate the mean
-        print("Calculating mean...")
+        # print("Calculating mean...")
         feature_dict[f'{column}_Mean_Week'] = df[column].shift(1).rolling(window=5, min_periods=0).mean()
         feature_dict[f'{column}_Mean_Month'] = df[column].shift(1).rolling(window=25, min_periods=0).mean()
         feature_dict[f'{column}_Mean_Quarter'] = df[column].shift(1).rolling(window=63, min_periods=0).mean()
         feature_dict[f'{column}_Mean_Year'] = df[column].shift(1).rolling(window=252, min_periods=0).mean()
 
         # Calculate the absolute deviation
-        print("Calculating absolute deviation...")
+        # print("Calculating absolute deviation...")
         for window, suffix in zip([5, 25, 63, 252], ['Week', 'Month', 'Quarter', 'Year']):
             rolling_mean = df[column].shift(1).rolling(window=window, min_periods=0).mean()
             abs_deviation = (df[column] - rolling_mean).abs().shift(1).rolling(window=window, min_periods=0).mean()
             feature_dict[f'{column}_AbsDev_{suffix}'] = abs_deviation
 
         # Calculate the standard deviation
-        print("Calculating standard deviation...")
+        # print("Calculating standard deviation...")
         # Uses backfilling to fill NaN values, as the first values will be NaN
         feature_dict[f'{column}_Std_Week'] = df[column].shift(1).rolling(window=5, min_periods=0).std().bfill()
         feature_dict[f'{column}_Std_Month'] = df[column].shift(1).rolling(window=25, min_periods=0).std().bfill()
@@ -122,10 +125,15 @@ def extract_features(df):
 
     return df
 
-df = gather_data()
-df = extract_features(df)
-# print(df.head())
+for f_d in get_filepaths():
+    df = read_file(f_d)
+    if df.empty:
+        continue
+    df = extract_features(df)
 
-# Save the preprocessed data to a CSV file
-print("Saving preprocessed data to 'preprocessed_stock_data.csv'...")
-df.to_csv('./preprocessed_stock_data.csv', index=False)
+    print(f"Saving preprocessed data to './processed_files/{f_d.split('/')[-1].split('.')[0]}.csv'...")
+    df.to_csv(f'./processed_files/{f_d.split("/")[-1].split(".")[0]}.csv', index=False)
+
+# df = gather_data()
+# df = extract_features(df)
+
