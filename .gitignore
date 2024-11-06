@@ -7,5 +7,5 @@ Datasets/*
 Assignment 3/Data/*
 Assignment 3/ETFs/*
 Assignment 3/Stocks/*
-*/target/*
+Assignment 3/stock-data-preprocesser/target/
 */shell.nix
