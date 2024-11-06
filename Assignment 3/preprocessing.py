@@ -63,9 +63,9 @@ def statistical_features(df):
     print("Creating statistical features for...")
 
     columns = ['Open', 'High', 'Low', 'Close', 'Volume']
-    feature_dict = {}
 
     for column in columns:
+        feature_dict = {}
         print(f"Column '{column}'...")
 
         # Calculate the mean
@@ -89,10 +89,10 @@ def statistical_features(df):
         feature_dict[f'{column}_Std_Month'] = df[column].rolling(window=25, min_periods=0).std().bfill()
         feature_dict[f'{column}_Std_Quarter'] = df[column].rolling(window=63, min_periods=0).std().bfill()
         feature_dict[f'{column}_Std_Year'] = df[column].rolling(window=252, min_periods=0).std().bfill()
+        # Convert dictionary to DataFrame and concatenate with original
+        features_df = pd.DataFrame(feature_dict, index=df.index)
+        df = pd.concat([df, features_df], axis=1)
 
-    # Convert dictionary to DataFrame and concatenate with original
-    features_df = pd.DataFrame(feature_dict, index=df.index)
-    df = pd.concat([df, features_df], axis=1)
 
     return df
 
