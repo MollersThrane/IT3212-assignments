@@ -1,0 +1,8 @@
+[package]
+name = "stock-data-preprocesser"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+polars = { version = "0.44.2", features = ["lazy", "temporal", "rolling_window", "dtype-date", "polars-io", "strings", "streaming", "abs"] }
+chrono = "0.4"
