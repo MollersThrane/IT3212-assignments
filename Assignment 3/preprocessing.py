@@ -83,25 +83,25 @@ def statistical_features(df):
 
         # Calculate the mean
         print("Calculating mean...")
-        feature_dict[f'{column}_Mean_Week'] = df[column].rolling(window=5, min_periods=0).mean()
-        feature_dict[f'{column}_Mean_Month'] = df[column].rolling(window=25, min_periods=0).mean()
-        feature_dict[f'{column}_Mean_Quarter'] = df[column].rolling(window=63, min_periods=0).mean()
-        feature_dict[f'{column}_Mean_Year'] = df[column].rolling(window=252, min_periods=0).mean()
+        feature_dict[f'{column}_Mean_Week'] = df[column].shift(1).rolling(window=5, min_periods=0).mean()
+        feature_dict[f'{column}_Mean_Month'] = df[column].shift(1).rolling(window=25, min_periods=0).mean()
+        feature_dict[f'{column}_Mean_Quarter'] = df[column].shift(1).rolling(window=63, min_periods=0).mean()
+        feature_dict[f'{column}_Mean_Year'] = df[column].shift(1).rolling(window=252, min_periods=0).mean()
 
         # Calculate the absolute deviation
         print("Calculating absolute deviation...")
         for window, suffix in zip([5, 25, 63, 252], ['Week', 'Month', 'Quarter', 'Year']):
-            rolling_mean = df[column].rolling(window=window, min_periods=0).mean()
-            abs_deviation = (df[column] - rolling_mean).abs().rolling(window=window, min_periods=0).mean()
+            rolling_mean = df[column].shift(1).rolling(window=window, min_periods=0).mean()
+            abs_deviation = (df[column] - rolling_mean).abs().shift(1).rolling(window=window, min_periods=0).mean()
             feature_dict[f'{column}_AbsDev_{suffix}'] = abs_deviation
 
         # Calculate the standard deviation
         print("Calculating standard deviation...")
         # Uses backfilling to fill NaN values, as the first values will be NaN
-        feature_dict[f'{column}_Std_Week'] = df[column].rolling(window=5, min_periods=0).std().bfill()
-        feature_dict[f'{column}_Std_Month'] = df[column].rolling(window=25, min_periods=0).std().bfill()
-        feature_dict[f'{column}_Std_Quarter'] = df[column].rolling(window=63, min_periods=0).std().bfill()
-        feature_dict[f'{column}_Std_Year'] = df[column].rolling(window=252, min_periods=0).std().bfill()
+        feature_dict[f'{column}_Std_Week'] = df[column].shift(1).rolling(window=5, min_periods=0).std().bfill()
+        feature_dict[f'{column}_Std_Month'] = df[column].shift(1).rolling(window=25, min_periods=0).std().bfill()
+        feature_dict[f'{column}_Std_Quarter'] = df[column].shift(1).rolling(window=63, min_periods=0).std().bfill()
+        feature_dict[f'{column}_Std_Year'] = df[column].shift(1).rolling(window=252, min_periods=0).std().bfill()
         # Convert dictionary to DataFrame and concatenate with original
         features_df = pd.DataFrame(feature_dict, index=df.index)
         df = pd.concat([df, features_df], axis=1)
