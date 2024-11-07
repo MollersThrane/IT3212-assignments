@@ -10,7 +10,7 @@ def read_file(filepath):
         return pd.DataFrame()  # Return an empty DataFrame if the file is empty
 
 def gather_data():    
-    path = "./IT3212-assignments/Assignment 1/Stocks/ge.us.txt"
+    path = "./Stocks/ge.us.txt"
     # filepaths = [path+f for f in os.listdir(path)]
     # df = pd.concat(map(read_file, filepaths))
     df = read_file(path)
