@@ -93,7 +93,7 @@ def statistical_features(df):
         print("Calculating absolute deviation...")
         for window, suffix in zip([5, 25, 63, 252], ['Week', 'Month', 'Quarter', 'Year']):
             rolling_mean = df[column].shift(1).rolling(window=window, min_periods=0).mean()
-            abs_deviation = (df[column] - rolling_mean).abs().shift(1).rolling(window=window, min_periods=0).mean()
+            abs_deviation = (df[column].shift(1) - rolling_mean).abs().rolling(window=window, min_periods=0).mean()
             feature_dict[f'{column}_AbsDev_{suffix}'] = abs_deviation
 
         # Calculate the standard deviation
@@ -128,6 +128,7 @@ def extract_features(df):
 
 df = gather_data()
 df = extract_features(df)
+df.drop(columns=["Open", "High", "Low", "Volume"], inplace=True)
 # print(df.head())
 
 # Save the preprocessed data to a CSV file
