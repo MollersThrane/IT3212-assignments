@@ -111,6 +111,9 @@ def statistical_features(df):
     return df
 
 def extract_features(df):
+
+    df.drop(columns=['OpenInt'], inplace=True)
+
     # Extract seasonal features
     df = seasonal_features(df)
 
