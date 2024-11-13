@@ -58,6 +58,10 @@ def lag_features(df, lags):
         feature_dict[f'Close_Lag_{lag}'] = df['Close'].shift(lag).ffill()
         feature_dict[f'Volume_Lag_{lag}'] = df['Volume'].shift(lag).ffill()
 
+    for f in feature_dict.values():
+        # print(f)
+        f.fillna(0, inplace=True)
+
     # Convert dictionary to DataFrame and concatenate with original
     features_df = pd.DataFrame(feature_dict, index=df.index)
     df = pd.concat([df, features_df], axis=1)
