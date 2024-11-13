@@ -22,7 +22,7 @@ def _perform_pca(df, variance_threshold=0.80):
     df_numeric = df.select_dtypes(include=[float, int])
 
     # Handle missing values by filling with the mean of each column
-    df_numeric.fillna(df_numeric.mean(), inplace=True)
+    df_numeric.ffill(inplace=True)
 
     # Standardize the data
     scaler = StandardScaler().set_output(transform="pandas")

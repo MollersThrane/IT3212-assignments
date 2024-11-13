@@ -52,11 +52,11 @@ def lag_features(df, lags):
     for lag in lags:
         print(f"Lag {lag}...")
 
-        feature_dict[f'Open_Lag_{lag}'] = df['Open'].shift(lag).bfill()
-        feature_dict[f'High_Lag_{lag}'] = df['High'].shift(lag).bfill()
-        feature_dict[f'Low_Lag_{lag}'] = df['Low'].shift(lag).bfill()
-        feature_dict[f'Close_Lag_{lag}'] = df['Close'].shift(lag).bfill()
-        feature_dict[f'Volume_Lag_{lag}'] = df['Volume'].shift(lag).bfill()
+        feature_dict[f'Open_Lag_{lag}'] = df['Open'].shift(lag).ffill()
+        feature_dict[f'High_Lag_{lag}'] = df['High'].shift(lag).ffill()
+        feature_dict[f'Low_Lag_{lag}'] = df['Low'].shift(lag).ffill()
+        feature_dict[f'Close_Lag_{lag}'] = df['Close'].shift(lag).ffill()
+        feature_dict[f'Volume_Lag_{lag}'] = df['Volume'].shift(lag).ffill()
 
     # Convert dictionary to DataFrame and concatenate with original
     features_df = pd.DataFrame(feature_dict, index=df.index)
@@ -99,10 +99,10 @@ def statistical_features(df):
         # Calculate the standard deviation
         print("Calculating standard deviation...")
         # Uses backfilling to fill NaN values, as the first values will be NaN
-        feature_dict[f'{column}_Std_Week'] = df[column].shift(1).rolling(window=5, min_periods=0).std().bfill()
-        feature_dict[f'{column}_Std_Month'] = df[column].shift(1).rolling(window=25, min_periods=0).std().bfill()
-        feature_dict[f'{column}_Std_Quarter'] = df[column].shift(1).rolling(window=63, min_periods=0).std().bfill()
-        feature_dict[f'{column}_Std_Year'] = df[column].shift(1).rolling(window=252, min_periods=0).std().bfill()
+        feature_dict[f'{column}_Std_Week'] = df[column].shift(1).rolling(window=5, min_periods=0).std().ffill()
+        feature_dict[f'{column}_Std_Month'] = df[column].shift(1).rolling(window=25, min_periods=0).std().ffill()
+        feature_dict[f'{column}_Std_Quarter'] = df[column].shift(1).rolling(window=63, min_periods=0).std().ffill()
+        feature_dict[f'{column}_Std_Year'] = df[column].shift(1).rolling(window=252, min_periods=0).std().ffill()
         # Convert dictionary to DataFrame and concatenate with original
         features_df = pd.DataFrame(feature_dict, index=df.index)
         df = pd.concat([df, features_df], axis=1)
