@@ -73,7 +73,8 @@ class ExpandingWindowByYear:
         self.testing_results = test_data[self.result_columns].copy(deep=True)
         test_data.drop(columns=self.result_columns, inplace=True)
         test_data = test_data.select_dtypes(include=[float, int])
-        test_pca = self.pca.transform(test_data)
+        scaled_test_data = self.scaler.transform(test_data)
+        test_pca = self.pca.transform(scaled_test_data)
         self.test_data = pd.DataFrame(test_pca, columns=[f'PC{i+1}' for i in range(self.num_pca_components)])
 
 
@@ -110,7 +111,8 @@ class ExpandingWindowByYear:
         if test_data.empty:
             raise ValueError("Test data is empty. Check the filtering conditions for test_data.")
         
-        test_pca = self.pca.transform(test_data)
+        scaled_test_data = self.scaler.transform(test_data)
+        test_pca = self.pca.transform(scaled_test_data)
         self.test_data = pd.DataFrame(test_pca, columns=[f'PC{i+1}' for i in range(self.num_pca_components)])
         
         if self.current_test_start_year > self.original_data['Year'].max():
