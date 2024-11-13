@@ -23,6 +23,7 @@ def _perform_pca(df, variance_threshold=0.80):
 
     # Handle missing values by filling with the mean of each column
     df_numeric.ffill(inplace=True)
+    df_numeric.fillna(0, inplace=True)
 
     # Standardize the data
     scaler = StandardScaler().set_output(transform="pandas")
