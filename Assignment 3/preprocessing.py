@@ -10,7 +10,7 @@ def read_file(filepath):
         return pd.DataFrame()  # Return an empty DataFrame if the file is empty
 
 def gather_data():    
-    path = "./Stocks/ge.us.txt"
+    path = "./Assignment 1/Stocks/ge.us.txt"
     # filepaths = [path+f for f in os.listdir(path)]
     # df = pd.concat(map(read_file, filepaths))
     df = read_file(path)
@@ -102,11 +102,14 @@ def statistical_features(df):
 
         # Calculate the standard deviation
         print("Calculating standard deviation...")
-        # Uses backfilling to fill NaN values, as the first values will be NaN
         feature_dict[f'{column}_Std_Week'] = df[column].shift(1).rolling(window=5, min_periods=0).std().ffill()
         feature_dict[f'{column}_Std_Month'] = df[column].shift(1).rolling(window=25, min_periods=0).std().ffill()
         feature_dict[f'{column}_Std_Quarter'] = df[column].shift(1).rolling(window=63, min_periods=0).std().ffill()
         feature_dict[f'{column}_Std_Year'] = df[column].shift(1).rolling(window=252, min_periods=0).std().ffill()
+        
+        for f in feature_dict.values():
+            f.fillna(0, inplace=True)
+
         # Convert dictionary to DataFrame and concatenate with original
         features_df = pd.DataFrame(feature_dict, index=df.index)
         df = pd.concat([df, features_df], axis=1)
@@ -137,4 +140,4 @@ df.drop(columns=["Open", "High", "Low", "Volume"], inplace=True)
 
 # Save the preprocessed data to a CSV file
 print("Saving preprocessed data to 'preprocessed_stock_data.csv'...")
-df.to_csv('./preprocessed_stock_data.csv', index=False)
+df.to_csv('./Datasets/preprocessed_stock_data.csv', index=False)
