@@ -55,6 +55,8 @@ class ExpandingWindowByYear:
         """
         if 'Year' not in data.columns:
             raise ValueError("DataFrame must contain a 'Year' column.")
+        if 'Date' not in data.columns:
+            raise ValueError("DataFrame must contain a 'Date' column.")
         
         self.original_data = data.copy(deep=True)
         self.initial_train_years = initial_train_years
@@ -64,32 +66,37 @@ class ExpandingWindowByYear:
         self.variance_to_keep = variance_to_keep
         self.result_columns = result_columns
 
+        # Initialize training data
         training_data = self.original_data[self.original_data['Year'] <= self.current_train_end_year].copy(deep=True)
+        self.train_dates = training_data['Date'].copy()  # Track 'Date' column for training data
         self.training_results = training_data[self.result_columns].copy(deep=True)
-        training_data.drop(columns=self.result_columns, inplace=True)
+        training_data.drop(columns=self.result_columns + ['Date'], inplace=True)  # Drop 'Date' and result columns
         self.training_data, self.num_pca_components, _, self.pca, self.scaler = _perform_pca(training_data, self.variance_to_keep)
 
-        test_data = self.original_data[(self.original_data['Year'] >= self.current_test_start_year) & 
-                         (self.original_data['Year'] <= self.current_test_start_year + self.test_years - 1)].copy(deep=True)
+        # Initialize testing data
+        test_data = self.original_data[
+            (self.original_data['Year'] >= self.current_test_start_year) & 
+            (self.original_data['Year'] <= self.current_test_start_year + self.test_years - 1)
+        ].copy(deep=True)
+        self.test_dates = test_data['Date'].copy()  # Track 'Date' column for testing data
         self.testing_results = test_data[self.result_columns].copy(deep=True)
-        test_data.drop(columns=self.result_columns, inplace=True)
+        test_data.drop(columns=self.result_columns + ['Date'], inplace=True)  # Drop 'Date' and result columns
         test_data = test_data.select_dtypes(include=[float, int])
         scaled_test_data = self.scaler.transform(test_data)
         test_pca = self.pca.transform(scaled_test_data)
         self.test_data = pd.DataFrame(test_pca, columns=[f'PC{i+1}' for i in range(self.num_pca_components)])
 
-
     def train_window(self):
         """
-        Returns the current training input window as a DataFrame, and the corresponding output values.
+        Returns the current training input window as a DataFrame, the corresponding output values, and the 'Date' column.
         """
-        return self.training_data, self.training_results
+        return self.training_data, self.training_results, self.train_dates
 
     def test_window(self):
         """
-        Returns the current testing input window as a DataFrame, and the corresponding output values.
+        Returns the current testing input window as a DataFrame, the corresponding output values, and the 'Date' column.
         """
-        return self.test_data, self.testing_results
+        return self.test_data, self.testing_results, self.test_dates
 
     def extend_train_window(self):
         """
@@ -98,15 +105,21 @@ class ExpandingWindowByYear:
         self.current_train_end_year += self.test_years
         self.current_test_start_year += self.test_years
         
+        # Update training data
         training_data = self.original_data[self.original_data['Year'] <= self.current_train_end_year].copy(deep=True)
+        self.train_dates = training_data['Date'].copy()  # Update 'Date' column for training data
         self.training_results = training_data[self.result_columns].copy(deep=True)
-        training_data.drop(columns=self.result_columns, inplace=True)
+        training_data.drop(columns=self.result_columns + ['Date'], inplace=True)  # Drop 'Date' and result columns
         self.training_data, self.num_pca_components, _, self.pca, self.scaler = _perform_pca(training_data, self.variance_to_keep)
 
-        test_data = self.original_data[(self.original_data['Year'] >= self.current_test_start_year) & 
-                         (self.original_data['Year'] <= self.current_test_start_year + self.test_years - 1)].copy(deep=True)
+        # Update testing data
+        test_data = self.original_data[
+            (self.original_data['Year'] >= self.current_test_start_year) & 
+            (self.original_data['Year'] <= self.current_test_start_year + self.test_years - 1)
+        ].copy(deep=True)
+        self.test_dates = test_data['Date'].copy()  # Update 'Date' column for testing data
         self.testing_results = test_data[self.result_columns].copy(deep=True)
-        test_data.drop(columns=self.result_columns, inplace=True)
+        test_data.drop(columns=self.result_columns + ['Date'], inplace=True)  # Drop 'Date' and result columns
         test_data = test_data.select_dtypes(include=[float, int])
         
         if test_data.empty:
@@ -118,7 +131,6 @@ class ExpandingWindowByYear:
         
         if self.current_test_start_year > self.original_data['Year'].max():
             raise IndexError("Testing window exceeds available data years.")
-
 
 # Example usage:
 if __name__ == "__main__":
