@@ -33,7 +33,7 @@ def save_window_plot(window_num, train_data, test_actual, test_predicted, mae, m
     plt.grid()
 
     # Add metrics summary to the plot
-    plt.text(0.05, 0.95, f"MAE: {mae:.2f}\nMSE: {mse:.2f}\nR²: {r2:.2f}\nTime: {elapsed_time:.2f}s",
+    plt.text(0.05, 0.95, f"MAE: {mae:.3f}\nMSE: {mse:.3f}\nR²: {r2:.3f}\nTime: {elapsed_time:.2f}s",
              transform=plt.gca().transAxes, fontsize=10, verticalalignment='top',
              bbox=dict(facecolor='white', alpha=0.5))
 
@@ -46,7 +46,7 @@ def save_window_plot(window_num, train_data, test_actual, test_predicted, mae, m
 
 def main():
     # Load preprocessed data
-    data_df = pd.read_csv('./preprocessed_stock_data.csv')
+    data_df = pd.read_csv('./Datasets/preprocessed_stock_data.csv')
 
     # Initialize the expanding window
     ew = ExpandingWindowByYear(
@@ -55,7 +55,7 @@ def main():
 
     all_mae, all_mse, all_r2, all_times = [], [], [], []
     all_actuals, all_predictions = [], []
-    plot_dir = "./Plots_expanding_window"
+    plot_dir = "./Plots/random_forest"
     os.makedirs(plot_dir, exist_ok=True)
 
     window_num = 1
@@ -115,14 +115,14 @@ def main():
     plt.grid()
 
     # Add overall metrics
+    total_time = sum(all_times)
     avg_mae = np.mean(all_mae)
     avg_mse = np.mean(all_mse)
     avg_r2 = np.mean(all_r2)
-    avg_time = np.mean(all_times)
     plt.text(
         0.05,
         0.95,
-        f"Avg MAE: {avg_mae:.2f}\nAvg MSE: {avg_mse:.2f}\nAvg R²: {avg_r2:.2f}\nAvg Time: {avg_time:.2f}s",
+        f"Avg MAE: {avg_mae:.3f}\nAvg MSE: {avg_mse:.3f}\nAvg R²: {avg_r2:.3f}\nTotal Time: {total_time:.2f}s",
         transform=plt.gca().transAxes,
         fontsize=10,
         verticalalignment="top",
@@ -132,12 +132,28 @@ def main():
     plt.savefig(f"{plot_dir}/final_combined_plot.png")
     plt.close()
 
+    # Metric trends plot
+    metric_names = ['Mean Absolute Error (MAE)', 'Mean Squared Error (MSE)', 'R² Score']
+    metric_values = [all_mae, all_mse, all_r2]
+    for metric, values in zip(metric_names, metric_values):
+        plt.figure(figsize=(12, 6))
+        plt.plot(range(1, len(values) + 1), values, marker='o', label=metric, color='red')
+        plt.title(f"Metric Trend - {metric}")
+        plt.xlabel("Expanding Window Number")
+        plt.ylabel(metric)
+        plt.legend()
+        plt.grid()
+
+        # Remove individual metric annotations for clarity
+        plt.savefig(os.path.join(plot_dir, f"{metric.replace(' ', '_').replace('(', '').replace(')', '').replace('²', '2')}_trend.png"))
+        plt.close()
+
     # Print overall metrics
     print("Overall Performance Across Expanding Windows:")
-    print(f"Avg MAE: {avg_mae:.2f}")
-    print(f"Avg MSE: {avg_mse:.2f}")
-    print(f"Avg R²: {avg_r2:.2f}")
-    print(f"Avg Time: {avg_time:.2f}s")
+    print(f"Avg MAE: {avg_mae:.3f}")
+    print(f"Avg MSE: {avg_mse:.3f}")
+    print(f"Avg R²: {avg_r2:.3f}")
+    print(f"Total Time: {total_time:.2f}s")
 
 
 if __name__ == "__main__":
