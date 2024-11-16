@@ -1,5 +1,5 @@
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.decomposition import PCA
 
 def _perform_pca(df, variance_threshold=0.80):
@@ -26,7 +26,7 @@ def _perform_pca(df, variance_threshold=0.80):
     df_numeric.fillna(0, inplace=True)
 
     # Standardize the data
-    scaler = StandardScaler().set_output(transform="pandas")
+    scaler = MinMaxScaler().set_output(transform="pandas")
     df_scaled = scaler.fit_transform(df_numeric)
 
     # Fit PCA to determine the number of components to retain the desired variance
