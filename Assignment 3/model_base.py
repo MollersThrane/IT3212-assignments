@@ -11,10 +11,13 @@ class AbstractModel(ABC):
         pass
 
     @abstractmethod
+    def predict(self, input_df: pd.DataFrame) -> pd.DataFrame:
+        pass
+
+    @abstractmethod
     def get_r2_rmse_mae_mape_per_year(self) -> pd.DataFrame:
         pass
 
     @abstractmethod
     def plot_results(self):
         pass
-

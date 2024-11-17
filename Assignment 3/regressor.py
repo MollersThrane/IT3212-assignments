@@ -27,7 +27,7 @@ class LinearRegressionStockModel(AbstractModel):
         self.model_predictions = pd.DataFrame(columns=['Date', 'Prediction'])
 
     def train_and_test(self):
-        e_w = ExpandingWindowByYear(
+        self.expanding_window = ExpandingWindowByYear(
             data=self.dataset, 
             initial_train_years=self.initial_train_years, 
             test_years=self.num_test_years, 
@@ -37,8 +37,8 @@ class LinearRegressionStockModel(AbstractModel):
         keep_testing = True
         while keep_testing:
             # Retrieve train/test sets
-            train_input, train_results, train_dates = e_w.train_window()
-            test_input, test_results, test_dates = e_w.test_window()
+            train_input, train_results, train_dates = self.expanding_window.train_window()
+            test_input, test_results, test_dates = self.expanding_window.test_window()
             
             # Train the model and predict
             self.model.fit(train_input, train_results)
@@ -79,9 +79,17 @@ class LinearRegressionStockModel(AbstractModel):
             ], ignore_index=True)
             
             try:
-                e_w.extend_train_window()
+                self.expanding_window.extend_train_window()
             except Exception:
                 keep_testing = False
+
+    def predict(self, input_df: pd.DataFrame) -> pd.DataFrame:
+        if self.model is None:
+            raise ValueError("Model has not been trained yet.")
+        input_scaled = self.expanding_window.scaler.transform(input_df)
+        input_scaled = self.expanding_window.pca.transform(input_scaled)
+        predictions = self.model.predict(input_scaled).flatten()
+        return pd.DataFrame({'Predictions': predictions}, index=input_df.index)
 
     def get_r2_rmse_mae_mape_per_year(self) -> pd.DataFrame:
         self.metrics_results.set_index('Year', inplace=True)

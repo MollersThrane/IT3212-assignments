@@ -41,6 +41,8 @@ class AdditiveStockModel(AbstractModel):
                 gam = LinearGAM(s(0))  # Using a single smooth term for simplicity
                 gam.fit(train_X, train_y)
 
+                self.model = gam
+
                 # Predict on the test window
                 predictions = gam.predict(test_X)
 
@@ -58,6 +60,15 @@ class AdditiveStockModel(AbstractModel):
             except (IndexError, ValueError):
                 # Stop if there are no more test windows
                 break
+
+
+    def predict(self, input_df: pd.DataFrame) -> pd.DataFrame:
+        if self.model is None:
+            raise ValueError("Model has not been trained yet.")
+        input_scaled = self.expanding_window.scaler.transform(input_df)
+        input_scaled = self.expanding_window.pca.transform(input_scaled)
+        predictions = self.model.predict(input_scaled).flatten()
+        return pd.DataFrame({'Predictions': predictions}, index=input_df.index)
 
     def get_r2_rmse_mae_mape_per_year(self) -> pd.DataFrame:
         metrics = []

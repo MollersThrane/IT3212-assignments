@@ -50,8 +50,8 @@ class NeuralNetworkStockModel(AbstractModel):
 
                 # Scale the data using MinMaxScaler
                 scaler = MinMaxScaler()
-                X_train_scaled = scaler.fit_transform(X_train)
-                X_test_scaled = scaler.transform(X_test)
+                X_train_scaled = X_train #scaler.fit_transform(X_train)
+                X_test_scaled = X_test #scaler.transform(X_test)
 
                 # Define and compile the neural network
                 model = Sequential([
@@ -75,6 +75,8 @@ class NeuralNetworkStockModel(AbstractModel):
                     callbacks=[early_stopping]
                 )
 
+                self.model = model
+
                 # Predict on the test data
                 y_test_pred = model.predict(X_test_scaled).flatten()
 
@@ -95,6 +97,14 @@ class NeuralNetworkStockModel(AbstractModel):
                 # Stop if no more test data is available
                 print("Reached the end of available data.")
                 break
+
+    def predict(self, input_df: pd.DataFrame) -> pd.DataFrame:
+        if self.model is None:
+            raise ValueError("Model has not been trained yet.")
+        input_scaled = self.expanding_window.scaler.transform(input_df)
+        input_scaled = self.expanding_window.pca.transform(input_scaled)
+        predictions = self.model.predict(input_scaled).flatten()
+        return pd.DataFrame({'Predictions': predictions}, index=input_df.index)
 
     def get_r2_rmse_mae_mape_per_year(self) -> pd.DataFrame:
         metrics = []
