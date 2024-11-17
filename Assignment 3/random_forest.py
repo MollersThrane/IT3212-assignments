@@ -1,160 +1,138 @@
-import os
 import pandas as pd
-import matplotlib.pyplot as plt
 import numpy as np
-from expanding_window import ExpandingWindowByYear
+import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.metrics import mean_absolute_error, root_mean_squared_error, r2_score, mean_absolute_percentage_error
 import time
+from model_base import AbstractModel
+from expanding_window import ExpandingWindowByYear
 
 
-def train_and_evaluate_rf(X_train, y_train, X_test, y_test):
-    """Train and evaluate a Random Forest model."""
-    model = RandomForestRegressor(n_estimators=100, max_depth=None, random_state=42)
-    model.fit(X_train, y_train)
-    y_pred = model.predict(X_test)
-    mae = mean_absolute_error(y_test, y_pred)
-    mse = mean_squared_error(y_test, y_pred)
-    r2 = r2_score(y_test, y_pred)
-    return mae, mse, r2, y_pred
+class RandomForestStockModel(AbstractModel):
+    def __init__(self, dataset: pd.DataFrame, initial_train_years=43, num_test_years=1):
+        self.dataset = dataset.copy(deep=True)
+        self.initial_train_years = initial_train_years
+        self.num_test_years = num_test_years
 
+        # Ensure 'Date' column is in datetime format
+        self.dataset['Date'] = pd.to_datetime(self.dataset['Date'])
 
-def save_window_plot(window_num, train_data, test_actual, test_predicted, mae, mse, r2, elapsed_time, output_dir):
-    """Save plot for a specific window."""
-    plt.figure(figsize=(12, 6))
-    plt.plot(range(len(train_data)), train_data, label='Training Data', color='blue')
-    plt.plot(range(len(train_data), len(train_data) + len(test_actual)), test_actual, label='Actual Test Data', color='green')
-    plt.plot(range(len(train_data), len(train_data) + len(test_predicted)), test_predicted, label='Predicted Test Data', color='orange')
+        # Drop rows with missing values
+        self.dataset.dropna(inplace=True)
 
-    plt.title(f"Random Forest - Window {window_num}")
-    plt.xlabel("Days")
-    plt.ylabel("Close Price")
-    plt.legend()
-    plt.grid()
+        # Initialize ExpandingWindowByYear instance
+        self.expanding_window = ExpandingWindowByYear(
+            data=self.dataset,
+            initial_train_years=self.initial_train_years,
+            test_years=self.num_test_years,
+            result_columns=["Close"]
+        )
 
-    # Add metrics summary to the plot
-    plt.text(0.05, 0.95, f"MAE: {mae:.3f}\nMSE: {mse:.3f}\nR²: {r2:.3f}\nTime: {elapsed_time:.2f}s",
-             transform=plt.gca().transAxes, fontsize=10, verticalalignment='top',
-             bbox=dict(facecolor='white', alpha=0.5))
+        # Initialize storage for results
+        self.actuals = []
+        self.predictions = []
+        self.mae_scores = []
+        self.rmse_scores = []
+        self.r2_scores = []
+        self.mape_scores = []
+        self.times = []
+        self.test_years = []
 
-    # Save the plot
-    os.makedirs(output_dir, exist_ok=True)
-    plot_path = os.path.join(output_dir, f"window_{window_num}.png")
-    plt.savefig(plot_path)
-    plt.close()
+    def train_and_test(self):
+        while True:
+            try:
+                # Retrieve train/test sets
+                train_X, train_y, _ = self.expanding_window.train_window()
+                test_X, test_y, _ = self.expanding_window.test_window()
 
+                # Record the start time
+                start_time = time.time()
 
-def main():
-    # Load preprocessed data
-    data_df = pd.read_csv('./Datasets/preprocessed_stock_data.csv')
+                # Train and evaluate the Random Forest model
+                model = RandomForestRegressor(n_estimators=100, max_depth=None, random_state=42)
+                model.fit(train_X, train_y.values.ravel())
+                y_pred = model.predict(test_X)
 
-    # Initialize the expanding window
-    ew = ExpandingWindowByYear(
-        data_df, initial_train_years=1, test_years=1, result_columns=["Close"]
-    )
+                # Calculate metrics
+                mae = mean_absolute_error(test_y, y_pred)
+                rmse = root_mean_squared_error(test_y, y_pred)
+                r2 = r2_score(test_y, y_pred)
+                mape = mean_absolute_percentage_error(test_y, y_pred)
+                elapsed_time = time.time() - start_time
 
-    all_mae, all_mse, all_r2, all_times = [], [], [], []
-    all_actuals, all_predictions = [], []
-    plot_dir = "./Plots/random_forest"
-    os.makedirs(plot_dir, exist_ok=True)
+                # Store results
+                self.actuals.extend(test_y["Close"].values)
+                self.predictions.extend(y_pred)
+                self.mae_scores.append(mae)
+                self.rmse_scores.append(rmse)
+                self.r2_scores.append(r2)
+                self.mape_scores.append(mape)
+                self.times.append(elapsed_time)
+                self.test_years.append(self.expanding_window.current_test_start_year)
 
-    window_num = 1
+                # Extend to the next expanding window
+                self.expanding_window.extend_train_window()
 
-    while True:
-        try:
-            # Get training and testing windows
-            train_X, train_y, train_dates = ew.train_window()
-            test_X, test_y, test_dates = ew.test_window()
+            except (IndexError, ValueError):
+                # Stop if no more windows are available
+                break
 
-            # Record time for training and evaluation
-            start_time = time.time()
-            mae, mse, r2, y_pred = train_and_evaluate_rf(
-                train_X.values, train_y.values.ravel(), test_X.values, test_y.values.ravel()
-            )
-            elapsed_time = time.time() - start_time
+    def get_r2_rmse_mae_mape_per_year(self) -> pd.DataFrame:
+        metrics = pd.DataFrame({
+            "Year": self.test_years,
+            "MAE": self.mae_scores,
+            "RMSE": self.rmse_scores,
+            "MAPE": self.mape_scores,
+            "R2": self.r2_scores
+        })
+        metrics.set_index("Year", inplace=True)
+        return metrics
 
-            # Store metrics
-            all_mae.append(mae)
-            all_mse.append(mse)
-            all_r2.append(r2)
-            all_times.append(elapsed_time)
+    def plot_results(self):
+        # Plot original vs predicted stock prices
+        test_indices = self.dataset.iloc[-len(self.predictions):].index
+        test_dates = self.dataset.loc[test_indices, 'Date']
 
-            # Accumulate predictions and actuals
-            all_actuals.extend(test_y["Close"].values)
-            all_predictions.extend(y_pred)
-
-            # Save window-specific plot
-            save_window_plot(window_num, train_y["Close"], test_y["Close"], y_pred, mae, mse, r2, elapsed_time, plot_dir)
-
-            # Extend the window for the next iteration
-            ew.extend_train_window()
-            window_num += 1
-
-        except IndexError:
-            print("No more windows to process.")
-            break
-        except ValueError as e:
-            print(f"Error encountered: {e}")
-            break
-
-    # Final combined plot
-    plt.figure(figsize=(12, 6))
-    plt.plot(
-        data_df['Date'], data_df['Close'],
-        label="Actual Data (Training + Test)", color="green", alpha=0.6
-    )
-    plt.plot(
-        data_df.iloc[-len(all_predictions):]['Date'], all_predictions,
-        label="Predicted Data", color="orange", alpha=0.8
-    )
-
-    plt.title("Random Forest - Combined Actual vs Predicted Close Prices")
-    plt.xlabel("Date")
-    plt.ylabel("Close Price")
-    plt.legend()
-    plt.grid()
-
-    # Add overall metrics
-    total_time = sum(all_times)
-    avg_mae = np.mean(all_mae)
-    avg_mse = np.mean(all_mse)
-    avg_r2 = np.mean(all_r2)
-    plt.text(
-        0.05,
-        0.95,
-        f"Avg MAE: {avg_mae:.3f}\nAvg MSE: {avg_mse:.3f}\nAvg R²: {avg_r2:.3f}\nTotal Time: {total_time:.2f}s",
-        transform=plt.gca().transAxes,
-        fontsize=10,
-        verticalalignment="top",
-        bbox=dict(facecolor='white', alpha=0.5),
-    )
-
-    plt.savefig(f"{plot_dir}/final_combined_plot.png")
-    plt.close()
-
-    # Metric trends plot
-    metric_names = ['Mean Absolute Error (MAE)', 'Mean Squared Error (MSE)', 'R² Score']
-    metric_values = [all_mae, all_mse, all_r2]
-    for metric, values in zip(metric_names, metric_values):
-        plt.figure(figsize=(12, 6))
-        plt.plot(range(1, len(values) + 1), values, marker='o', label=metric, color='red')
-        plt.title(f"Metric Trend - {metric}")
-        plt.xlabel("Expanding Window Number")
-        plt.ylabel(metric)
+        plt.figure(figsize=(14, 6))
+        plt.plot(self.dataset['Date'], self.dataset['Close'], label="Actual Data (Training + Test)", color="green", alpha=0.6)
+        plt.plot(test_dates, self.predictions, label="Predicted Data", color="orange", alpha=0.8)
+        plt.title("Random Forest - Combined Actual vs Predicted Close Prices")
+        plt.xlabel("Date")
+        plt.ylabel("Close Price")
         plt.legend()
         plt.grid()
+        plt.show()
 
-        # Remove individual metric annotations for clarity
-        plt.savefig(os.path.join(plot_dir, f"{metric.replace(' ', '_').replace('(', '').replace(')', '').replace('²', '2')}_trend.png"))
-        plt.close()
+        # Plot all metrics trends in one plot
+        plt.figure(figsize=(14, 6))
+        plt.plot(self.test_years, self.mae_scores, label="MAE", marker='o', color="blue")
+        plt.plot(self.test_years, self.rmse_scores, label="RMSE", marker='s', color="red")
+        plt.plot(self.test_years, self.mape_scores, label="MAPE", marker='^', color="orange")
+        plt.plot(self.test_years, self.r2_scores, label="R²", marker='x', color="purple")
+        plt.axhline(y=0, color='black', linestyle='--', label="Baseline")
+        plt.title("Metrics Trends Over Test Years")
+        plt.xlabel("Year")
+        plt.ylabel("Metric Value")
+        plt.legend()
+        plt.grid()
+        plt.show()
 
-    # Print overall metrics
-    print("Overall Performance Across Expanding Windows:")
-    print(f"Avg MAE: {avg_mae:.3f}")
-    print(f"Avg MSE: {avg_mse:.3f}")
-    print(f"Avg R²: {avg_r2:.3f}")
-    print(f"Total Time: {total_time:.2f}s")
 
-
+# Usage Example
 if __name__ == "__main__":
-    main()
+    # Load preprocessed data
+    df = pd.read_csv('./preprocessed_stock_data.csv')
+    df.dropna(inplace=True)
+
+    # Instantiate the RandomForestStockModel
+    model = RandomForestStockModel(dataset=df, initial_train_years=43, num_test_years=1)
+
+    # Train and test the model
+    model.train_and_test()
+
+    # Get metrics and display
+    metrics = model.get_r2_rmse_mae_mape_per_year()
+    print(metrics)
+
+    # Plot the results
+    model.plot_results()
