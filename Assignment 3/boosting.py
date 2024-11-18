@@ -68,25 +68,181 @@ def save_window_plot(window_num, train_data, test_actual, test_predicted, mae, m
     plt.savefig(os.path.join(output_dir, f"window_{window_num}.png"))
     plt.close()
 
+def analyze_weak_learner_weights(boosting_model, output_dir, model_name, window_num):
+    """
+    Analyze and visualize weak learner weights and feature importance in the AdaBoostRegressor model for each window.
+    """
+    if not isinstance(boosting_model, AdaBoostRegressor):
+        print("This function is only applicable to AdaBoostRegressor.")
+        return
 
-def boosting_pipeline(data_df, model_name, output_dir, base_model, n_estimators=50, learning_rate=1.0):
+    # Extract weights and weak learners
+    learner_weights = boosting_model.estimator_weights_
+    weak_learners = boosting_model.estimators_
+    print(f"Weights of Weak Learners for {model_name} (Window {window_num}): {learner_weights}")
+
+    # Initialize aggregated feature importance (if supported by the base model)
+    aggregated_importance = None
+    feature_support = False
+
+    # Calculate feature importance for tree-based weak learners
+    for idx, learner in enumerate(weak_learners):
+        if hasattr(learner, "feature_importances_"):  # Check if the learner supports feature importances
+            feature_support = True
+            importance = learner.feature_importances_ * learner_weights[idx]  # Weighted importance
+            if aggregated_importance is None:
+                aggregated_importance = importance
+            else:
+                aggregated_importance += importance
+
+    # Save weak learner weights for this window
+    plt.figure(figsize=(10, 6))
+    plt.bar(range(1, len(learner_weights) + 1), learner_weights, color='skyblue')
+    plt.title(f"Weak Learner Weights for {model_name} (Window {window_num})")
+    plt.xlabel("Weak Learner Index")
+    plt.ylabel("Weight")
+    plt.grid(axis="y")
     os.makedirs(output_dir, exist_ok=True)
-    expanding_window = ExpandingWindowByYear(data_df, initial_train_years=1, test_years=1, result_columns=["Close"])
+    plt.savefig(os.path.join(output_dir, f"{model_name}_weak_learner_weights_window_{window_num}.png"))
+    plt.close()
+
+    # Save feature importance for this window (if supported)
+    if feature_support and aggregated_importance is not None:
+        plt.figure(figsize=(10, 6))
+        plt.bar(range(len(aggregated_importance)), aggregated_importance, color='salmon')
+        plt.title(f"Aggregated Feature Importance (Weighted) for {model_name} (Window {window_num})")
+        plt.xlabel("Feature Index")
+        plt.ylabel("Importance")
+        plt.grid(axis="y")
+        plt.savefig(os.path.join(output_dir, f"{model_name}_feature_importance_window_{window_num}.png"))
+        plt.close()
+    elif not feature_support:
+        print(f"Feature importance analysis is not supported for the base model used in AdaBoost (Window {window_num}).")
+
+def generate_final_aggregate_graphs(output_dir, model_name, all_weights, all_importances):
+    """
+    Generate final aggregate graphs for weak learner weights and feature importance across all windows.
+    """
+    # Aggregate weak learner weights
+    avg_weights = np.mean(all_weights, axis=0)
+    plt.figure(figsize=(10, 6))
+    plt.bar(range(1, len(avg_weights) + 1), avg_weights, color='skyblue')
+    plt.title(f"Final Aggregated Weak Learner Weights for {model_name}")
+    plt.xlabel("Weak Learner Index")
+    plt.ylabel("Average Weight")
+    plt.grid(axis="y")
+    plt.savefig(os.path.join(output_dir, f"{model_name}_final_weak_learner_weights.png"))
+    plt.close()
+
+    # Aggregate feature importance (if applicable)
+    if all_importances:
+        avg_importance = np.mean(np.array(all_importances), axis=0)
+        plt.figure(figsize=(10, 6))
+        plt.bar(range(len(avg_importance)), avg_importance, color='salmon')
+        plt.title(f"Final Aggregated Feature Importance for {model_name}")
+        plt.xlabel("Feature Index")
+        plt.ylabel("Average Importance")
+        plt.grid(axis="y")
+        plt.savefig(os.path.join(output_dir, f"{model_name}_final_feature_importance.png"))
+        plt.close()
+        
+def generate_final_combined_plot(data_df, all_predictions, all_actuals, all_times, all_mae, all_mse, all_r2, output_dir):
+    """
+    Generate a final combined plot for actual vs predicted data across all windows,
+    with improved readability (e.g., formatted x-axis for years).
+    """
+    plt.figure(figsize=(12, 6))
+    
+    # Plot actual data
+    plt.plot(
+        data_df['Date'], data_df['Close'],
+        label="Actual Data (Training + Test)", color="green", alpha=0.6
+    )
+    
+    # Plot predictions (only for test data range)
+    plt.plot(
+        data_df.iloc[-len(all_predictions):]['Date'], all_predictions,
+        label="Predicted Data", color="orange", alpha=0.8
+    )
+
+    # Format the x-axis to show selected years
+    years = data_df['Date'].dt.year
+    start_year, end_year = years.min(), years.max()
+    year_range = end_year - start_year + 1
+    max_labels = 10
+    interval = max(1, year_range // max_labels)
+    plt.gca().xaxis.set_major_locator(plt.matplotlib.dates.YearLocator(interval))
+    plt.gca().xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%Y'))
+
+    plt.title("Boosting - Combined Actual vs Predicted Close Prices")
+    plt.xlabel("Year")
+    plt.ylabel("Close Price")
+    plt.legend()
+    plt.grid()
+
+    # Add overall metrics
+    total_time = sum(all_times)
+    avg_mae = np.mean(all_mae)
+    avg_mse = np.mean(all_mse)
+    avg_r2 = np.mean(all_r2)
+    plt.text(
+        0.05,
+        0.95,
+        f"Avg MAE: {avg_mae:.3f}\nAvg MSE: {avg_mse:.3f}\nAvg R²: {avg_r2:.3f}\nTotal Time: {total_time:.2f}s",
+        transform=plt.gca().transAxes,
+        fontsize=10,
+        verticalalignment="top",
+        bbox=dict(facecolor='white', alpha=0.5),
+    )
+
+    # Save the final combined plot
+    os.makedirs(output_dir, exist_ok=True)
+    plt.savefig(os.path.join(output_dir, "final_combined_plot.png"))
+    plt.close()
+
+
+
+        
+def generate_metric_trend_plots(all_mae, all_mse, all_r2, output_dir):
+    """
+    Generate metric trend plots for MAE, MSE, and R² across all windows.
+    """
+    metric_names = ['Mean Absolute Error (MAE)', 'Mean Squared Error (MSE)', 'R² Score']
+    metric_values = [all_mae, all_mse, all_r2]
+
+    for metric, values in zip(metric_names, metric_values):
+        plt.figure(figsize=(12, 6))
+        plt.plot(range(1, len(values) + 1), values, marker='o', label=metric, color='red')
+        plt.title(f"Metric Trend - {metric}")
+        plt.xlabel("Expanding Window Number")
+        plt.ylabel(metric)
+        plt.legend()
+        plt.grid()
+        os.makedirs(output_dir, exist_ok=True)
+        plt.savefig(os.path.join(output_dir, f"{metric.replace(' ', '_')}_trend.png"))
+        plt.close()
+
+
+def boosting_pipeline(data_df, model_name, output_dir, base_model=None, n_estimators=50, learning_rate=1.0):
+    os.makedirs(output_dir, exist_ok=True)
+    expanding_window = ExpandingWindowByYear(data_df, initial_train_years=53, test_years=1, result_columns=["Close"])
     window_num = 1
     all_mae, all_mse, all_r2, all_times = [], [], [], []
     all_actuals, all_predictions = [], []
+    all_weights = []  # Store weak learner weights for all windows
+    all_importances = []  # Store feature importance for all windows
 
     while True:
         try:
             X_train, y_train, _ = expanding_window.train_window()
             X_test, y_test, _ = expanding_window.test_window()
 
+            # Check if test window is empty
             if X_test.empty or y_test.empty:
-                print(f"Window {window_num}: Empty test window. Skipping.")
-                expanding_window.extend_train_window()
-                continue
+                print(f"Window {window_num}: Empty test window. Skipping remaining windows.")
+                break  # Exit the loop if there is no more test data
 
-            # Configure model dynamically
+            # Dynamically configure base model if required
             if model_name == "NeuralNetwork":
                 input_dim = X_train.shape[1]
                 base_model = create_nn_base_model(input_dim)
@@ -95,10 +251,22 @@ def boosting_pipeline(data_df, model_name, output_dir, base_model, n_estimators=
 
             # Train and evaluate
             start_time = time.time()
-            _, y_pred, mae, mse, r2 = train_and_evaluate_boosting(
+            boosting_model, y_pred, mae, mse, r2 = train_and_evaluate_boosting(
                 X_train.values, y_train.values.ravel(), X_test.values, y_test.values, base_model, n_estimators, learning_rate
             )
             elapsed_time = time.time() - start_time
+
+            # Analyze weak learner weights (pass the AdaBoostRegressor model)
+            analyze_weak_learner_weights(boosting_model, output_dir, model_name, window_num)
+            all_weights.append(boosting_model.estimator_weights_)
+
+            # Collect feature importance if applicable
+            if hasattr(boosting_model.estimators_[0], "feature_importances_"):
+                importance = np.sum(
+                    [learner.feature_importances_ * weight for learner, weight in zip(boosting_model.estimators_, boosting_model.estimator_weights_)],
+                    axis=0
+                )
+                all_importances.append(importance)
 
             # Save window-specific plot
             save_window_plot(window_num, y_train.values.ravel(), y_test.values.ravel(), y_pred,
@@ -115,12 +283,27 @@ def boosting_pipeline(data_df, model_name, output_dir, base_model, n_estimators=
             expanding_window.extend_train_window()
             window_num += 1
 
+        except ValueError as ve:
+            # Handle empty test data gracefully
+            print(f"ValueError encountered: {ve}")
+            break
         except IndexError:
             print("No more windows to process.")
             break
 
-    return all_mae, all_mse, all_r2, sum(all_times), all_predictions, all_actuals
+    # Generate final combined plot
+    # After processing all windows
+    generate_final_combined_plot(data_df, all_predictions, all_actuals, all_times, all_mae, all_mse, all_r2, output_dir)
 
+
+
+    # Generate metric trend plots
+    generate_metric_trend_plots(all_mae, all_mse, all_r2, output_dir)
+
+    # Generate final aggregate graphs after all windows
+    generate_final_aggregate_graphs(output_dir, model_name, all_weights, all_importances)
+
+    return all_mae, all_mse, all_r2, sum(all_times), all_predictions, all_actuals
 
 # --------------- Comparison Function --------------- #
 
@@ -161,15 +344,26 @@ def compare_models(models_metrics, all_predictions, all_actuals, all_dates, outp
 # --------------- Main Script --------------- #
 
 if __name__ == "__main__":
+    # Load dataset
     data_df = pd.read_csv('./Datasets/preprocessed_stock_data.csv')
+
+    # Convert Date column to datetime format
+    data_df['Date'] = pd.to_datetime(data_df['Date'], errors='coerce')
+    if data_df['Date'].isna().any():
+        print("Warning: There are invalid or missing dates in the dataset.")
+        data_df = data_df.dropna(subset=['Date'])
+    
+    # Ensure the dataset is sorted by date
+    data_df = data_df.sort_values('Date').reset_index(drop=True)
+
     base_output_dir = "./Plots/boosting"
 
     models = [
-        ("RandomForest", (RandomForestRegressor(n_estimators=100, max_depth=None, random_state=42))),
+        ("NeuralNetwork", None),  # Dynamic base model
+        ("AdditiveModel", None),  # Dynamic base model
+        ("RandomForest", RandomForestRegressor(n_estimators=100, max_depth=None, random_state=42)),
         ("LinearRegression", LinearRegression()),
         ("SVR", SVR(kernel='linear')),
-        ("NeuralNetwork", None),
-        ("AdditiveModel", None),
     ]
 
     models_metrics = {}
