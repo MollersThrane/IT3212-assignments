@@ -2,22 +2,38 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-from expanding_window import ExpandingWindowByYear
-from sklearn.ensemble import AdaBoostRegressor
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import time
-from sklearn.tree import DecisionTreeRegressor
+from expanding_window import ExpandingWindowByYear
+from sklearn.ensemble import AdaBoostRegressor, RandomForestRegressor
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.linear_model import LinearRegression
 from sklearn.svm import SVR
-from sklearn.neural_network import MLPRegressor
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import PolynomialFeatures
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Input
+from tensorflow.keras.callbacks import EarlyStopping
+from pygam import LinearGAM, s
 
+
+# --------------- Custom Base Models for Boosting --------------- #
+
+def create_nn_base_model(input_dim):
+    model = Sequential([
+        Input(shape=(input_dim,)),
+        Dense(64, activation='relu'),
+        Dense(32, activation='relu'),
+        Dense(1)
+    ])
+    model.compile(optimizer='adam', loss='mean_squared_error')
+    return model
+
+
+def create_additive_base_model():
+    return LinearGAM(s(0))
+
+
+# --------------- Boosting Pipeline --------------- #
 
 def train_and_evaluate_boosting(X_train, y_train, X_test, y_test, base_model, n_estimators=50, learning_rate=1.0):
-    """
-    Train and evaluate a boosting model with a specified base algorithm.
-    """
     model = AdaBoostRegressor(estimator=base_model, n_estimators=n_estimators, learning_rate=learning_rate, random_state=42)
     model.fit(X_train, y_train.ravel())
     y_pred = model.predict(X_test)
@@ -27,172 +43,152 @@ def train_and_evaluate_boosting(X_train, y_train, X_test, y_test, base_model, n_
     return model, y_pred, mae, mse, r2
 
 
-def save_window_plot(window_num, train_data, test_actual, test_predicted, mae, mse, r2, elapsed_time, output_dir, model_name, model_params):
-    """Save plot for a specific window."""
+def save_window_plot(window_num, train_data, test_actual, test_predicted, mae, mse, r2, elapsed_time, output_dir, model_name):
+    """
+    Save plot for a specific window.
+    """
     plt.figure(figsize=(12, 6))
     plt.plot(range(len(train_data)), train_data, label='Training Data', color='blue')
     plt.plot(range(len(train_data), len(train_data) + len(test_actual)), test_actual, label='Actual Test Data', color='green')
-    plt.plot(range(len(train_data), len(train_data) + len(test_predicted)), test_predicted, label='Boosted Predictions', color='orange')
+    plt.plot(range(len(train_data), len(train_data) + len(test_predicted)), test_predicted, label='Predicted Test Data', color='orange')
 
-    plt.title(f"Boosting - {model_name} (Window {window_num})\n{model_params}")
+    plt.title(f"{model_name} - Window {window_num}")
     plt.xlabel("Days")
     plt.ylabel("Close Price")
     plt.legend()
     plt.grid()
 
-    # Add metrics summary to the plot
+    # Annotate with metrics
     plt.text(0.05, 0.95, f"MAE: {mae:.3f}\nMSE: {mse:.3f}\nR²: {r2:.3f}\nTime: {elapsed_time:.2f}s",
              transform=plt.gca().transAxes, fontsize=10, verticalalignment='top',
              bbox=dict(facecolor='white', alpha=0.5))
 
     # Save the plot
     os.makedirs(output_dir, exist_ok=True)
-    plot_path = os.path.join(output_dir, f"window_{window_num}.png")
-    plt.savefig(plot_path)
+    plt.savefig(os.path.join(output_dir, f"window_{window_num}.png"))
     plt.close()
 
 
-def boosting_pipeline(data_df, base_model, model_name, output_dir, n_estimators=50, learning_rate=1.0):
-    """
-    Perform boosting using an expanding window on the given dataset and base model.
-    """
+def boosting_pipeline(data_df, model_name, output_dir, base_model, n_estimators=50, learning_rate=1.0):
     os.makedirs(output_dir, exist_ok=True)
     expanding_window = ExpandingWindowByYear(data_df, initial_train_years=1, test_years=1, result_columns=["Close"])
     window_num = 1
     all_mae, all_mse, all_r2, all_times = [], [], [], []
     all_actuals, all_predictions = [], []
-    model_params = str(base_model)
-
-    # Ensure 'Date' is in datetime format
-    if not pd.api.types.is_datetime64_any_dtype(data_df['Date']):
-        data_df['Date'] = pd.to_datetime(data_df['Date'], errors='coerce')
 
     while True:
         try:
-            # Get training and testing windows
-            X_train, y_train, train_dates = expanding_window.train_window()
-            X_test, y_test, test_dates = expanding_window.test_window()
+            X_train, y_train, _ = expanding_window.train_window()
+            X_test, y_test, _ = expanding_window.test_window()
 
-            # Skip if test data is empty
             if X_test.empty or y_test.empty:
-                print("Skipping empty test window.")
+                print(f"Window {window_num}: Empty test window. Skipping.")
                 expanding_window.extend_train_window()
                 continue
 
-            # Record time for training and evaluation
+            # Configure model dynamically
+            if model_name == "NeuralNetwork":
+                input_dim = X_train.shape[1]
+                base_model = create_nn_base_model(input_dim)
+            elif model_name == "AdditiveModel":
+                base_model = create_additive_base_model()
+
+            # Train and evaluate
             start_time = time.time()
             _, y_pred, mae, mse, r2 = train_and_evaluate_boosting(
-                X_train.values, y_train.values.ravel(), X_test.values, y_test.values,
-                base_model, n_estimators=n_estimators, learning_rate=learning_rate
+                X_train.values, y_train.values.ravel(), X_test.values, y_test.values, base_model, n_estimators, learning_rate
             )
             elapsed_time = time.time() - start_time
+
+            # Save window-specific plot
+            save_window_plot(window_num, y_train.values.ravel(), y_test.values.ravel(), y_pred,
+                             mae, mse, r2, elapsed_time, output_dir, model_name)
 
             # Store metrics
             all_mae.append(mae)
             all_mse.append(mse)
             all_r2.append(r2)
             all_times.append(elapsed_time)
-
-            # Accumulate predictions and actuals
             all_actuals.extend(y_test.values.ravel())
             all_predictions.extend(y_pred)
 
-            # Save window-specific plot
-            save_window_plot(
-                window_num, y_train.values.ravel(), y_test.values.ravel(), y_pred, 
-                mae, mse, r2, elapsed_time, output_dir, model_name, model_params
-            )
-
-            # Extend training window
             expanding_window.extend_train_window()
             window_num += 1
 
         except IndexError:
             print("No more windows to process.")
             break
-        except ValueError as e:
-            print(f"Error encountered: {e}")
-            break
 
-    # Return empty results if no windows were processed
-    if not all_mae:
-        print(f"No valid windows processed for {model_name}.")
-        return [], [], [], 0
+    return all_mae, all_mse, all_r2, sum(all_times), all_predictions, all_actuals
+
+
+# --------------- Comparison Function --------------- #
+
+def compare_models(models_metrics, all_predictions, all_actuals, all_dates, output_dir):
+    """
+    Generate comparison graphs for all models.
+    """
+    comparison_dir = os.path.join(output_dir, "comparison")
+    os.makedirs(comparison_dir, exist_ok=True)
 
     # Final combined plot
     plt.figure(figsize=(12, 6))
-    plt.plot(
-        data_df['Date'], data_df['Close'],
-        label="Actual Data (Training + Test)", color="green", alpha=0.6
-    )
-    plt.plot(
-        data_df.iloc[-len(all_predictions):]['Date'], all_predictions,
-        label="Predicted Data", color="orange", alpha=0.8
-    )
-
-    # Format the x-axis to show only selected years
-    years = data_df['Date'].dt.year
-    start_year, end_year = years.min(), years.max()
-    year_range = end_year - start_year + 1
-    max_labels = 10
-    interval = max(1, year_range // max_labels)
-    plt.gca().xaxis.set_major_locator(plt.matplotlib.dates.YearLocator(interval))
-    plt.gca().xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%Y'))
-
-    plt.title(f"{model_name} - Combined Actual vs Predicted Close Prices\n{model_params}")
+    plt.plot(all_dates, all_actuals, label="Actual Data", color="green", alpha=0.6)
+    for model_name, predictions in all_predictions.items():
+        plt.plot(all_dates[-len(predictions):], predictions, label=f"Predicted ({model_name})", alpha=0.8)
+    plt.title("Actual vs Predicted Close Prices (All Models)")
     plt.xlabel("Year")
     plt.ylabel("Close Price")
     plt.legend()
     plt.grid()
-
-    # Add overall metrics
-    total_time = sum(all_times)
-    avg_mae = np.mean(all_mae)
-    avg_mse = np.mean(all_mse)
-    avg_r2 = np.mean(all_r2)
-    plt.text(
-        0.05,
-        0.95,
-        f"Avg MAE: {avg_mae:.3f}\nAvg MSE: {avg_mse:.3f}\nAvg R²: {avg_r2:.3f}\nTotal Time: {total_time:.2f}s",
-        transform=plt.gca().transAxes,
-        fontsize=10,
-        verticalalignment="top",
-        bbox=dict(facecolor='white', alpha=0.5),
-    )
-
-    plt.savefig(f"{output_dir}/final_combined_plot.png")
+    plt.savefig(os.path.join(comparison_dir, "predicted_vs_actual_all_models.png"))
     plt.close()
 
-    return all_mae, all_mse, all_r2, total_time
+    # Metric Comparison
+    for metric_name, idx in zip(["MAE", "MSE", "R²"], range(3)):
+        metric_values = [np.mean(metrics[idx]) for metrics in models_metrics.values()]
+        model_names = list(models_metrics.keys())
+        plt.figure(figsize=(8, 6))
+        plt.bar(model_names, metric_values)
+        plt.title(f"{metric_name} Comparison")
+        plt.xlabel("Model")
+        plt.ylabel(metric_name)
+        plt.grid(axis="y")
+        plt.savefig(os.path.join(comparison_dir, f"{metric_name.lower()}_comparison.png"))
+        plt.close()
 
 
-
-
-
+# --------------- Main Script --------------- #
 
 if __name__ == "__main__":
-    # Load preprocessed data
     data_df = pd.read_csv('./Datasets/preprocessed_stock_data.csv')
-
-    # Define output directory
     base_output_dir = "./Plots/boosting"
 
-    # Define base models for boosting
-    base_models = [
-        ("DecisionTree", DecisionTreeRegressor(max_depth=3)),
+    models = [
+        ("RandomForest", (RandomForestRegressor(n_estimators=100, max_depth=None, random_state=42))),
         ("LinearRegression", LinearRegression()),
         ("SVR", SVR(kernel='linear')),
-        ("NeuralNetwork", MLPRegressor(hidden_layer_sizes=(50, 50), max_iter=500)),
-        ("AdditiveModel", make_pipeline(PolynomialFeatures(degree=2), LinearRegression())),
+        ("NeuralNetwork", None),
+        ("AdditiveModel", None),
     ]
 
     models_metrics = {}
-    for model_name, model in base_models:
-        print(f"Running Boosting with {model_name}...")
-        model_output_dir = os.path.join(base_output_dir, model_name)
-        mae, mse, r2, total_time = boosting_pipeline(data_df, model, model_name, model_output_dir)
-        models_metrics[model_name] = (mae, mse, r2)
-        print(f"{model_name}: Avg MAE = {np.mean(mae):.3f}, Avg R² = {np.mean(r2):.3f}, Total Time = {total_time:.2f}s")
+    all_predictions = {}
+    all_actuals = None
+    all_dates = data_df["Date"]
 
-    # Compare all models
-    compare_models(models_metrics, base_output_dir)
+    for model_name, base_model in models:
+        print(f"Running BOOSTING with {model_name}...")
+        model_output_dir = os.path.join(base_output_dir, model_name)
+
+        mae, mse, r2, total_time, predictions, actuals = boosting_pipeline(
+            data_df, model_name, model_output_dir, base_model=base_model
+        )
+
+        models_metrics[model_name] = (mae, mse, r2)
+        all_predictions[model_name] = predictions
+        if all_actuals is None:
+            all_actuals = actuals
+
+    # Generate comparison plots
+    compare_models(models_metrics, all_predictions, all_actuals, all_dates, base_output_dir)
