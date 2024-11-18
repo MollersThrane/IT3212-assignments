@@ -104,6 +104,9 @@ class ExpandingWindowByYear:
         """
         self.current_train_end_year += self.test_years
         self.current_test_start_year += self.test_years
+
+        if self.current_test_start_year > self.original_data['Year'].max():
+            raise IndexError("Testing window exceeds available data years.")
         
         # Update training data
         training_data = self.original_data[self.original_data['Year'] <= self.current_train_end_year].copy(deep=True)
@@ -129,8 +132,6 @@ class ExpandingWindowByYear:
         test_pca = self.pca.transform(scaled_test_data)
         self.test_data = pd.DataFrame(test_pca, columns=[f'PC{i+1}' for i in range(self.num_pca_components)])
         
-        if self.current_test_start_year > self.original_data['Year'].max():
-            raise IndexError("Testing window exceeds available data years.")
 
 # Example usage:
 if __name__ == "__main__":

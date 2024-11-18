@@ -1,7 +1,6 @@
 import pandas as pd
 import os
 
-
 def read_file(filepath):
     try:
         return pd.read_csv(filepath)
@@ -10,10 +9,53 @@ def read_file(filepath):
         return pd.DataFrame()  # Return an empty DataFrame if the file is empty
 
 def gather_data():    
-    path = "./Assignment 1/Stocks/ge.us.txt"
+    path = "./Stocks/ge.us.txt"
     # filepaths = [path+f for f in os.listdir(path)]
     # df = pd.concat(map(read_file, filepaths))
     df = read_file(path)
+
+    return df
+
+def detect_and_remove_outliers(df):
+    """
+    Detect outliers using Z-score and IQR methods and remove data points where both methods agree.
+    """
+    print("Detecting and removing outliers...")
+    columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+
+    indices_to_remove = set()
+
+    for column in columns:
+        # Compute the differences between consecutive values
+        diff = df[column].diff()
+
+        # Compute Z-score of differences
+        mean_diff = diff.mean()
+        std_diff = diff.std()
+        z_scores = (diff - mean_diff) / std_diff
+
+        # Identify outliers with Z-score > threshold (e.g., 3)
+        threshold_z = 3
+        outliers_z = z_scores.abs() > threshold_z
+
+        # Compute IQR of differences
+        Q1 = diff.quantile(0.25)
+        Q3 = diff.quantile(0.75)
+        IQR = Q3 - Q1
+        lower_bound = Q1 - 1.5 * IQR
+        upper_bound = Q3 + 1.5 * IQR
+
+        outliers_iqr = (diff < lower_bound) | (diff > upper_bound)
+
+        # Identify outliers where both methods agree
+        outliers = outliers_z & outliers_iqr
+
+        # Collect indices of outliers to remove
+        indices = df.index[outliers].tolist()
+        indices_to_remove.update(indices)
+
+    # Remove the outliers from the DataFrame
+    df = df.drop(index=indices_to_remove).reset_index(drop=True)
 
     return df
 
@@ -59,7 +101,6 @@ def lag_features(df, lags):
         feature_dict[f'Volume_Lag_{lag}'] = df['Volume'].shift(lag).ffill()
 
     for f in feature_dict.values():
-        # print(f)
         f.fillna(0, inplace=True)
 
     # Convert dictionary to DataFrame and concatenate with original
@@ -114,7 +155,6 @@ def statistical_features(df):
         features_df = pd.DataFrame(feature_dict, index=df.index)
         df = pd.concat([df, features_df], axis=1)
 
-
     return df
 
 def extract_features(df):
@@ -134,10 +174,11 @@ def extract_features(df):
     return df
 
 df = gather_data()
+df = detect_and_remove_outliers(df)
 df = extract_features(df)
 df.drop(columns=["Open", "High", "Low", "Volume"], inplace=True)
 # print(df.head())
 
 # Save the preprocessed data to a CSV file
 print("Saving preprocessed data to 'preprocessed_stock_data.csv'...")
-df.to_csv('./Datasets/preprocessed_stock_data.csv', index=False)
+df.to_csv('./preprocessed_stock_data.csv', index=False)

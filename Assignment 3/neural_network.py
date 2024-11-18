@@ -103,7 +103,8 @@ class NeuralNetworkStockModel(AbstractModel):
             raise ValueError("Model has not been trained yet.")
         input_scaled = self.expanding_window.scaler.transform(input_df)
         input_scaled = self.expanding_window.pca.transform(input_scaled)
-        predictions = self.model.predict(input_scaled).flatten()
+        df_pca = pd.DataFrame(input_scaled, columns=[f'PC{i+1}' for i in range(self.expanding_window.num_pca_components)])
+        predictions = self.model.predict(df_pca).flatten()
         return pd.DataFrame({'Predictions': predictions}, index=input_df.index)
 
     def get_r2_rmse_mae_mape_per_year(self) -> pd.DataFrame:

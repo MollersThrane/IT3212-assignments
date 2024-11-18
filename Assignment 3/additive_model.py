@@ -34,17 +34,15 @@ class AdditiveStockModel(AbstractModel):
         while True:
             try:
                 # Retrieve train/test sets
-                train_X, train_y = self.expanding_window.train_window()
-                test_X, test_y = self.expanding_window.test_window()
+                train_X, train_y, _ = self.expanding_window.train_window()
+                test_X, test_y, _ = self.expanding_window.test_window()
 
                 # Train the GAM model
-                gam = LinearGAM(s(0))  # Using a single smooth term for simplicity
-                gam.fit(train_X, train_y)
-
-                self.model = gam
+                self.model = LinearGAM(s(0))  # Using a single smooth term for simplicity
+                self.model.fit(train_X, train_y)
 
                 # Predict on the test window
-                predictions = gam.predict(test_X)
+                predictions = self.model.predict(test_X)
 
                 # Store results
                 self.results.append({
@@ -57,8 +55,9 @@ class AdditiveStockModel(AbstractModel):
                 # Extend the training window
                 self.expanding_window.extend_train_window()
 
-            except (IndexError, ValueError):
+            except (IndexError, ValueError) as e:
                 # Stop if there are no more test windows
+                print(f"Stopped training because {e}")
                 break
 
 
@@ -67,7 +66,8 @@ class AdditiveStockModel(AbstractModel):
             raise ValueError("Model has not been trained yet.")
         input_scaled = self.expanding_window.scaler.transform(input_df)
         input_scaled = self.expanding_window.pca.transform(input_scaled)
-        predictions = self.model.predict(input_scaled).flatten()
+        df_pca = pd.DataFrame(input_scaled, columns=[f'PC{i+1}' for i in range(self.expanding_window.num_pca_components)])
+        predictions = self.model.predict(df_pca).flatten()
         return pd.DataFrame({'Predictions': predictions}, index=input_df.index)
 
     def get_r2_rmse_mae_mape_per_year(self) -> pd.DataFrame:

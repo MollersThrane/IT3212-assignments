@@ -8,16 +8,16 @@ from model_base import AbstractModel
 
 class LinearRegressionStockModel(AbstractModel):
     def __init__(self, dataset: pd.DataFrame, initial_train_years=43, num_test_years=1):
-        self.dataset = dataset.copy(deep=True)
         self.initial_train_years = initial_train_years
         self.num_test_years = num_test_years
-        
-        # Ensure 'Date' column is in datetime format
-        self.dataset['Date'] = pd.to_datetime(self.dataset['Date'])
-        
-        # Drop rows with missing values
-        self.dataset.dropna(inplace=True)
-        
+
+        self.expanding_window = ExpandingWindowByYear(
+            data=dataset, 
+            initial_train_years=self.initial_train_years, 
+            test_years=self.num_test_years, 
+            result_columns=['Close']
+        )
+
         # Initialize the LinearRegression model
         self.model = LinearRegression()
         
@@ -27,18 +27,13 @@ class LinearRegressionStockModel(AbstractModel):
         self.model_predictions = pd.DataFrame(columns=['Date', 'Prediction'])
 
     def train_and_test(self):
-        self.expanding_window = ExpandingWindowByYear(
-            data=self.dataset, 
-            initial_train_years=self.initial_train_years, 
-            test_years=self.num_test_years, 
-            result_columns=['Close']
-        )
         
         keep_testing = True
         while keep_testing:
             # Retrieve train/test sets
             train_input, train_results, train_dates = self.expanding_window.train_window()
             test_input, test_results, test_dates = self.expanding_window.test_window()
+            test_dates = pd.to_datetime(test_dates)
             
             # Train the model and predict
             self.model.fit(train_input, train_results)
@@ -88,7 +83,8 @@ class LinearRegressionStockModel(AbstractModel):
             raise ValueError("Model has not been trained yet.")
         input_scaled = self.expanding_window.scaler.transform(input_df)
         input_scaled = self.expanding_window.pca.transform(input_scaled)
-        predictions = self.model.predict(input_scaled).flatten()
+        df_pca = pd.DataFrame(input_scaled, columns=[f'PC{i+1}' for i in range(self.expanding_window.num_pca_components)])
+        predictions = self.model.predict(df_pca).flatten()
         return pd.DataFrame({'Predictions': predictions}, index=input_df.index)
 
     def get_r2_rmse_mae_mape_per_year(self) -> pd.DataFrame:
