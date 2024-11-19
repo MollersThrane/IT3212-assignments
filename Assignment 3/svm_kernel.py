@@ -19,7 +19,7 @@ class SupportVectorRegressorStockModel(AbstractModel):
         )
 
         # Initialize the LinearRegression model
-        self.model = SVR()
+        self.model = SVR(kernel='linear')
         
         # Initialize storage for results
         self.metrics_results = pd.DataFrame(columns=['Year', 'MAE', 'MAPE', 'RMSE', 'R2'])

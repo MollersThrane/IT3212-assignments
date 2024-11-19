@@ -27,6 +27,8 @@ class RandomForestStockModel(AbstractModel):
             test_years=self.num_test_years,
             result_columns=["Close"]
         )
+        
+        self.model = RandomForestRegressor()
 
         # Initialize storage for results
         self.actuals = []
@@ -49,10 +51,8 @@ class RandomForestStockModel(AbstractModel):
                 start_time = time.time()
 
                 # Train and evaluate the Random Forest model
-                model = RandomForestRegressor(n_estimators=100, max_depth=None, random_state=42)
-                model.fit(train_X, train_y.values.ravel())
-                self.model = model
-                y_pred = model.predict(test_X)
+                self.model.fit(train_X, train_y.values.ravel())
+                y_pred = self.model.predict(test_X)
 
                 # Calculate metrics
                 mae = mean_absolute_error(test_y, y_pred)

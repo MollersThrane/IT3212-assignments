@@ -4,6 +4,7 @@ from regressor import LinearRegressionStockModel
 from additive_model import AdditiveStockModel
 from neural_network import NeuralNetworkStockModel
 from random_forest import RandomForestStockModel
+from svm_kernel import SupportVectorRegressorStockModel
 import matplotlib.pyplot as plt
 from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error, root_mean_squared_error, r2_score
 
@@ -15,7 +16,7 @@ df.dropna(inplace=True)
 num_years = df['Year'].max() - df['Year'].min()
 print(num_years)
 
-model_classes = [LinearRegressionStockModel, AdditiveStockModel, NeuralNetworkStockModel, RandomForestStockModel]
+model_classes = [LinearRegressionStockModel, AdditiveStockModel, NeuralNetworkStockModel, RandomForestStockModel, SupportVectorRegressorStockModel]
 
 # Split DataFrame into N parts
 df_split = np.array_split(df, len(model_classes) + 1)

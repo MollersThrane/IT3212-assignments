@@ -145,14 +145,18 @@ class NeuralNetworkStockModel(AbstractModel):
         plt.legend()
         plt.show()
 
-        # Plot R² scores for each year
-        plt.figure(figsize=(14, 6))
-        plt.plot(self.test_years, self.r2_scores, marker='o', linestyle='-', color='purple', label="R² Score by Year")
-        plt.axhline(y=0, color='red', linestyle='--')
-        plt.title("R² Score for Each Test Year")
+        self.metrics_results = self.get_r2_rmse_mae_mape_per_year()
+        plt.figure(figsize=(12, 8))
+        plt.plot(self.metrics_results.index, self.metrics_results['MAE'], label="MAE", marker="o")
+        plt.plot(self.metrics_results.index, self.metrics_results['MAPE'], label="MAPE", marker="x")
+        plt.plot(self.metrics_results.index, self.metrics_results['RMSE'], label="RMSE", marker="s")
+        plt.plot(self.metrics_results.index, self.metrics_results['R2'], label="R2", marker="d")
+        plt.title("Metrics Over Years")
         plt.xlabel("Year")
-        plt.ylabel("R² Score")
+        plt.ylabel("Metric Value")
         plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
         plt.show()
 
 
