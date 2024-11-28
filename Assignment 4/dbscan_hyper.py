@@ -94,8 +94,8 @@ y_encoded = label_encoder.fit_transform(y)
 
 # 4. Set Up the Parameter Grid for GridSearchCV
 param_grid = {
-    'eps': [176.3775],          # Example values; adjust as needed
-    'min_samples': [4, 5, 6, 7, 8, 9],
+    'eps': [x for x in range(23, 50)],          # Example values; adjust as needed
+    'min_samples': [2, 3, 4, 5, 6, 7, 8, 9],
     'metric': ['euclidean']  # Add other metrics if desired
 }
 

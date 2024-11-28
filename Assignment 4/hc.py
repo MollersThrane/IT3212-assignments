@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.mixture import GaussianMixture
+from sklearn.cluster import AgglomerativeClustering
 from sklearn.metrics import (
     confusion_matrix,
     accuracy_score,
@@ -15,7 +15,7 @@ from scipy.optimize import linear_sum_assignment
 from sklearn.preprocessing import LabelEncoder
 import seaborn as sns  # For improved plotting aesthetics
 
-# Load the dataset
+# 1. Load and Prepare the Dataset
 data = pd.read_csv("./train_pca.csv")
 
 # Separate features (X) and labels (y)
@@ -26,37 +26,26 @@ y = data['type']
 label_encoder = LabelEncoder()
 y_encoded = label_encoder.fit_transform(y)
 
-# Initialize and fit the Gaussian Mixture Model
-gmm = GaussianMixture(
-    n_components=9,
-    covariance_type='full',
-    init_params='kmeans',
-    max_iter=100,
-    tol=0.01,
-    random_state=42
+# 2. Initialize and Fit the Agglomerative Clustering Model with specified parameters
+agg_clustering = AgglomerativeClustering(
+    n_clusters=11,
+    linkage='complete',
+    metric='cosine'
 )
-gmm.fit(X)
+agg_clustering.fit(X)
+y_pred = agg_clustering.labels_
 
-# Predict cluster labels
-y_pred = gmm.predict(X)
-
-# Compute the confusion matrix
+# 3. Align Predicted Labels with True Labels Using Hungarian Algorithm
 conf_matrix = confusion_matrix(y_encoded, y_pred)
-
-# Use the Hungarian algorithm to find the optimal label mapping
 row_ind, col_ind = linear_sum_assignment(-conf_matrix)
+label_mapping = {pred_label: true_label for pred_label, true_label in zip(col_ind, row_ind)}
+y_pred_aligned = np.array([label_mapping.get(label, -1) for label in y_pred])
 
-# Create a mapping from predicted labels to true labels
-label_mapping = {old_label: new_label for old_label, new_label in zip(col_ind, row_ind)}
-
-# Apply the mapping to the predicted labels
-y_pred_aligned = np.array([label_mapping[label] for label in y_pred])
-
-# Evaluation metrics
+# 4. Evaluation Metrics
 accuracy = accuracy_score(y_encoded, y_pred_aligned)
-precision = precision_score(y_encoded, y_pred_aligned, average='weighted')
-recall = recall_score(y_encoded, y_pred_aligned, average='weighted')
-f1 = f1_score(y_encoded, y_pred_aligned, average='weighted')
+precision = precision_score(y_encoded, y_pred_aligned, average='weighted', zero_division=0)
+recall = recall_score(y_encoded, y_pred_aligned, average='weighted', zero_division=0)
+f1 = f1_score(y_encoded, y_pred_aligned, average='weighted', zero_division=0)
 ari = adjusted_rand_score(y_encoded, y_pred)
 nmi = normalized_mutual_info_score(y_encoded, y_pred)
 
@@ -68,19 +57,19 @@ print(f'F1-Score: {f1:.2f}')
 print(f'Adjusted Rand Index: {ari:.2f}')
 print(f'Normalized Mutual Information: {nmi:.2f}')
 
-# Create a DataFrame with the results
+# 5. Create a DataFrame with the results
 df_results = X.copy()
 df_results['cluster'] = y_pred
 df_results['label'] = y
 
-# Calculate the percentage of labeled points in each cluster
+# 6. Calculate the percentage of labeled points in each cluster
 cluster_label_counts = pd.crosstab(df_results['cluster'], df_results['label'])
 cluster_label_percentages = cluster_label_counts.div(cluster_label_counts.sum(axis=1), axis=0) * 100
 
 print("\nPercentage of each label in each cluster:")
 print(cluster_label_percentages)
 
-# Plot the percentages as a stacked bar chart
+# 7. Plot the percentages as a stacked bar chart
 cluster_label_percentages_filled = cluster_label_percentages.fillna(0)
 ax = cluster_label_percentages_filled.plot(
     kind='bar',
@@ -94,7 +83,7 @@ plt.legend(title='Label', bbox_to_anchor=(1.05, 1), loc='upper left')
 plt.tight_layout()
 plt.show()
 
-# Visualization
+# 8. Visualization
 # Plot the clustered data
 unique_labels = np.unique(y_pred)
 num_unique_labels = len(unique_labels)
@@ -119,7 +108,7 @@ if X.shape[1] >= 3:
             edgecolors='w',
             linewidth=0.5
         )
-    ax.set_title('Gaussian Mixture Model Clustering (3D)')
+    ax.set_title('Agglomerative Clustering (3D)')
     ax.set_xlabel('Feature 1')
     ax.set_ylabel('Feature 2')
     ax.set_zlabel('Feature 3')
@@ -142,7 +131,7 @@ elif X.shape[1] == 2:
             edgecolors='w',
             linewidth=0.5
         )
-    plt.title('Gaussian Mixture Model Clustering (2D)')
+    plt.title('Agglomerative Clustering (2D)')
     plt.xlabel('Feature 1')
     plt.ylabel('Feature 2')
     plt.legend()

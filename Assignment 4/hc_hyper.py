@@ -107,13 +107,9 @@ y = data['type']
 label_encoder = LabelEncoder()
 y_encoded = label_encoder.fit_transform(y)
 
-# Scale the features
-scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
-
 # 4. Set Up the Parameter Grid for GridSearchCV
 param_grid = {
-    'n_clusters': [4, 5, 6],  # Adjust based on expected number of clusters
+    'n_clusters': [4, 5, 6, 7, 8, 9, 10, 11, 12, 13],  # Adjust based on expected number of clusters
     'linkage': ['complete', 'average', 'single'],
     'metric': ['euclidean', 'manhattan', 'cosine', 'l1', 'l2']  # 'ward' only supports 'euclidean'
 }
@@ -133,7 +129,7 @@ grid_search = GridSearchCV(
 
 # 7. Perform Grid Search to Find the Best Hyperparameters
 print("Starting Grid Search for AgglomerativeClustering hyperparameters...")
-grid_search.fit(X_scaled, y_encoded)
+grid_search.fit(X, y_encoded)
 print("Grid Search completed.")
 
 # Display the best parameters
@@ -142,8 +138,8 @@ print(f"Best Parameters: {best_params}")
 
 # 8. Fit the Best Model with the Best Parameters
 best_agg = grid_search.best_estimator_
-best_agg.fit(X_scaled)
-y_pred = best_agg.predict(X_scaled)
+best_agg.fit(X)
+y_pred = best_agg.predict(X)
 
 # 9. Align Predicted Labels with True Labels Using Hungarian Algorithm
 conf_matrix = confusion_matrix(y_encoded, y_pred)
@@ -178,8 +174,8 @@ if X.shape[1] == 2:
         color = colors(label)
         label_name = f'Cluster {label}'
         plt.scatter(
-            X_scaled[y_pred_aligned == label, 0],
-            X_scaled[y_pred_aligned == label, 1],
+            X[y_pred_aligned == label, 0],
+            X[y_pred_aligned == label, 1],
             s=40,
             color=color,
             label=label_name,

@@ -13,12 +13,12 @@ from sklearn.metrics import (
 )
 from scipy.optimize import linear_sum_assignment
 from sklearn.preprocessing import LabelEncoder
+import seaborn as sns  # For improved plotting
 
 # Load the dataset
 data = pd.read_csv("./train_pca.csv")
 
 # Separate features (X) and labels (y)
-# Replace 'type' with the actual name of your label column if different
 X = data.drop(columns=['type'])
 y = data['type']
 
@@ -27,7 +27,6 @@ label_encoder = LabelEncoder()
 y_encoded = label_encoder.fit_transform(y)
 
 # Initialize and fit the DBSCAN model
-# You may need to tune eps and min_samples based on your dataset
 dbscan = DBSCAN(eps=176.3775, min_samples=6, metric='euclidean')  # Adjust parameters as needed
 dbscan.fit(X)
 
@@ -80,12 +79,70 @@ else:
     print(f'Number of clusters found (excluding noise): {len(unique_pred_clusters)}')
     print(f'Number of noise points: {np.sum(y_pred == -1)}')
 
+    # Create a DataFrame with the results
+    df_results = X.copy()
+    df_results['cluster'] = y_pred
+    df_results['label'] = y
+
+    # Calculate the percentage of labeled points in each cluster
+    cluster_label_counts = pd.crosstab(df_results['cluster'], df_results['label'])
+    cluster_label_percentages = cluster_label_counts.div(cluster_label_counts.sum(axis=1), axis=0) * 100
+
+    print("\nPercentage of each label in each cluster:")
+    print(cluster_label_percentages)
+
+    # Plot the percentages as a stacked bar chart
+    cluster_label_percentages_filled = cluster_label_percentages.fillna(0)
+    ax = cluster_label_percentages_filled.plot(
+        kind='bar',
+        stacked=True,
+        figsize=(10, 7),
+        colormap='tab20'
+    )
+    plt.ylabel('Percentage')
+    plt.title('Percentage of Each Label in Each Cluster')
+    plt.legend(title='Label', bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.tight_layout()
+    plt.show()
+
+    # Visualization
     # Plot the clustered data
-    # Note: This visualization assumes the data has two features for 2D plotting
-    if X.shape[1] == 2:
+    unique_labels = set(y_pred)
+    num_unique_labels = len(unique_labels) - (1 if -1 in unique_labels else 0)  # Exclude noise from color mapping
+    colors = plt.cm.get_cmap('viridis', num_unique_labels)
+
+    if X.shape[1] >= 3:
+        # 3D Plotting
+        fig = plt.figure(figsize=(10, 8))
+        ax = fig.add_subplot(111, projection='3d')
+        for label in unique_labels:
+            if label == -1:
+                # Black color for noise
+                color = 'k'
+                label_name = 'Noise'
+            else:
+                color = colors(label)
+                label_name = f'Cluster {label}'
+            ax.scatter(
+                X.iloc[y_pred == label, 0],
+                X.iloc[y_pred == label, 1],
+                X.iloc[y_pred == label, 2],
+                s=40,
+                color=color,
+                label=label_name,
+                alpha=0.6,
+                edgecolors='w',
+                linewidth=0.5
+            )
+        ax.set_title('DBSCAN Clustering (3D)')
+        ax.set_xlabel('Feature 1')
+        ax.set_ylabel('Feature 2')
+        ax.set_zlabel('Feature 3')
+        plt.legend()
+        plt.show()
+    elif X.shape[1] == 2:
+        # 2D Plotting
         plt.figure(figsize=(8, 6))
-        unique_labels = set(y_pred_aligned)
-        colors = plt.cm.get_cmap('viridis', len(unique_labels))
         for label in unique_labels:
             if label == -1:
                 # Black color for noise
@@ -95,8 +152,8 @@ else:
                 color = colors(label)
                 label_name = f'Cluster {label}'
             plt.scatter(
-                X.iloc[y_pred_aligned == label, 0],
-                X.iloc[y_pred_aligned == label, 1],
+                X.iloc[y_pred == label, 0],
+                X.iloc[y_pred == label, 1],
                 s=40,
                 color=color,
                 label=label_name,
@@ -104,10 +161,10 @@ else:
                 edgecolors='w',
                 linewidth=0.5
             )
-        plt.title('DBSCAN Clustering')
+        plt.title('DBSCAN Clustering (2D)')
         plt.xlabel('Feature 1')
         plt.ylabel('Feature 2')
         plt.legend()
         plt.show()
     else:
-        print("The data has more than two features; skipping 2D plot.")
+        print("Data has less than 2 features; cannot plot.")

@@ -103,17 +103,13 @@ y = data['type']
 label_encoder = LabelEncoder()
 y_encoded = label_encoder.fit_transform(y)
 
-# Scale the features
-scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
-
 # 4. Set Up the Parameter Grid for GridSearchCV
 param_grid = {
-    'n_components': [5],  # Adjust based on expected number of clusters
-    'covariance_type': ['spherical'],
-    'tol': [3875e-3, 4e-3, 4125e-3],
-    'max_iter': [100],
-    'init_params': ['random']
+    'n_components': [5, 6, 7, 8, 9, 10],  # Adjust based on expected number of clusters
+    'covariance_type': ['full', 'tied', 'diag', 'spherical'],
+    'tol': [0.1, 0.01, 0.001],
+    'max_iter': [100, 200],
+    'init_params': ['kmeans', 'random']
 }
 
 # 5. Initialize the Custom GaussianMixture Estimator
@@ -131,7 +127,7 @@ grid_search = GridSearchCV(
 
 # 7. Perform Grid Search to Find the Best Hyperparameters
 print("Starting Grid Search for GaussianMixture hyperparameters...")
-grid_search.fit(X_scaled, y_encoded)
+grid_search.fit(X, y_encoded)
 print("Grid Search completed.")
 
 # Display the best parameters
@@ -140,8 +136,8 @@ print(f"Best Parameters: {best_params}")
 
 # 8. Fit the Best Model with the Best Parameters
 best_gmm = grid_search.best_estimator_
-best_gmm.fit(X_scaled)
-y_pred = best_gmm.predict(X_scaled)
+best_gmm.fit(X)
+y_pred = best_gmm.predict(X)
 
 # 9. Align Predicted Labels with True Labels Using Hungarian Algorithm
 conf_matrix = confusion_matrix(y_encoded, y_pred)
@@ -170,8 +166,8 @@ print(f'Normalized Mutual Information: {nmi:.2f}')
 if X.shape[1] == 2:
     plt.figure(figsize=(8, 6))
     plt.scatter(
-        X_scaled[:, 0],
-        X_scaled[:, 1],
+        X[:, 0],
+        X[:, 1],
         c=y_pred_aligned,
         s=40,
         cmap='viridis',
