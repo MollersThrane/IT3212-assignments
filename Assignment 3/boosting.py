@@ -3,32 +3,128 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import time
+
+from sklearn.base import BaseEstimator, RegressorMixin
 from expanding_window import ExpandingWindowByYear
 from sklearn.ensemble import AdaBoostRegressor, RandomForestRegressor
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.metrics import root_mean_squared_error, r2_score, mean_absolute_error
 from sklearn.linear_model import LinearRegression
 from sklearn.svm import SVR
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Input
 from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.optimizers import Adam
 from pygam import LinearGAM, s
 
 
 # --------------- Custom Base Models for Boosting --------------- #
 
-def create_nn_base_model(input_dim):
-    model = Sequential([
-        Input(shape=(input_dim,)),
-        Dense(64, activation='relu'),
-        Dense(32, activation='relu'),
-        Dense(1)
-    ])
-    model.compile(optimizer='adam', loss='mean_squared_error')
-    return model
+# def create_nn_base_model(input_dim):
+#     model = Sequential([
+#         Input(shape=(input_dim,)),
+#         Dense(64, activation='relu'),
+#         Dense(32, activation='relu'),
+#         Dense(1)
+#     ])
+#     model.compile(optimizer='adam', loss='mean_squared_error')
+#     return model
 
+class KerasRegressorWrapper(BaseEstimator, RegressorMixin):
+    def __init__(self, input_dim=None, learning_rate=0.001):
+        self.input_dim = input_dim
+        self.learning_rate = learning_rate
+        self.model = None  # Placeholder for the Keras model
+
+    def build_model(self):
+        model = Sequential([
+            Input(shape=(self.input_dim,)),
+            Dense(64, activation='relu'),
+            Dense(32, activation='relu'),
+            Dense(1)
+        ])
+        model.compile(optimizer=Adam(learning_rate=self.learning_rate), loss='mean_squared_error')
+        return model
+
+    def fit(self, X, y):
+        if self.model is None:
+            self.model = self.build_model()
+        self.model.fit(X, y, epochs=10, batch_size=32, verbose=0)
+        return self
+
+    def predict(self, X):
+        return self.model.predict(X).flatten()
+
+    def get_params(self, deep=True):
+        return {'input_dim': self.input_dim, 'learning_rate': self.learning_rate}
+
+    def set_params(self, **params):
+        for param, value in params.items():
+            setattr(self, param, value)
+        return self
+    
+    # if early stopping is needed:
+    # def fit(self, X, y):
+    #     if self.model is None:
+    #         self.model = self.build_model()
+    #     early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+    #     self.model.fit(X, y, epochs=100, batch_size=32, verbose=0, validation_split=0.2, callbacks=[early_stopping])
+    #     return self
+
+
+
+from sklearn.base import BaseEstimator, RegressorMixin
+from pygam import LinearGAM, s
+
+from pygam import LinearGAM, s
+from sklearn.base import BaseEstimator, RegressorMixin
+import numpy as np
+
+class LinearGAMWrapper(BaseEstimator, RegressorMixin):
+    def __init__(self, terms=None, max_iter=100, tol=0.0001, lam=1.0):
+        self.terms = terms if terms else s(0)  # Default to spline on the first feature
+        self.max_iter = max_iter
+        self.tol = tol
+        self.lam = lam
+        self.model = None
+
+    def _ensure_2d_array(self, X):
+        """Ensure input is a dense, 2D numpy array."""
+        if hasattr(X, "toarray"):  # Convert sparse matrices to dense
+            X = X.toarray()
+        if X.ndim == 1:  # Convert 1D arrays to 2D
+            X = X.reshape(-1, 1)
+        return np.array(X)
+
+    def fit(self, X, y):
+        X = self._ensure_2d_array(X)  # Ensure X is in the correct format
+        self.model = LinearGAM(self.terms, max_iter=self.max_iter, tol=self.tol)
+        self.model.lam = self.lam  # Set lambda regularization
+        self.model.fit(X, y)
+        return self
+
+    def predict(self, X):
+        X = self._ensure_2d_array(X)  # Ensure X is in the correct format
+        if not self.model:
+            raise ValueError("Model must be fit before prediction.")
+        return self.model.predict(X)
+
+    def get_params(self, deep=True):
+        return {
+            'terms': self.terms,
+            'max_iter': self.max_iter,
+            'tol': self.tol,
+            'lam': self.lam
+        }
+
+    def set_params(self, **params):
+        for key, value in params.items():
+            setattr(self, key, value)
+        return self
 
 def create_additive_base_model():
-    return LinearGAM(s(0))
+    return LinearGAMWrapper(terms=s(0), lam=1.0)
+
+
 
 
 # --------------- Boosting Pipeline --------------- #
@@ -38,12 +134,13 @@ def train_and_evaluate_boosting(X_train, y_train, X_test, y_test, base_model, n_
     model.fit(X_train, y_train.ravel())
     y_pred = model.predict(X_test)
     mae = mean_absolute_error(y_test, y_pred)
-    mse = mean_squared_error(y_test, y_pred)
+    # rmse = mean_squared_error(y_test, y_pred)
+    rmse = root_mean_squared_error(y_test, y_pred)
     r2 = r2_score(y_test, y_pred)
-    return model, y_pred, mae, mse, r2
+    return model, y_pred, mae, rmse, r2
 
 
-def save_window_plot(window_num, train_data, test_actual, test_predicted, mae, mse, r2, elapsed_time, output_dir, model_name):
+def save_window_plot(window_num, train_data, test_actual, test_predicted, mae, rmse, r2, elapsed_time, output_dir, model_name):
     """
     Save plot for a specific window.
     """
@@ -59,9 +156,10 @@ def save_window_plot(window_num, train_data, test_actual, test_predicted, mae, m
     plt.grid()
 
     # Annotate with metrics
-    plt.text(0.05, 0.95, f"MAE: {mae:.3f}\nMSE: {mse:.3f}\nR²: {r2:.3f}\nTime: {elapsed_time:.2f}s",
-             transform=plt.gca().transAxes, fontsize=10, verticalalignment='top',
-             bbox=dict(facecolor='white', alpha=0.5))
+    plt.text(0.05, 0.95, f"MAE: {mae:.3f}\nRMSE: {rmse:.3f}\nR²: {r2:.3f}\nTime: {elapsed_time:.2f}s",
+         transform=plt.gca().transAxes, fontsize=10, verticalalignment='top',
+         bbox=dict(facecolor='white', alpha=0.5))
+
 
     # Save the plot
     os.makedirs(output_dir, exist_ok=True)
@@ -146,7 +244,7 @@ def generate_final_aggregate_graphs(output_dir, model_name, all_weights, all_imp
         plt.savefig(os.path.join(output_dir, f"{model_name}_final_feature_importance.png"))
         plt.close()
         
-def generate_final_combined_plot(data_df, all_predictions, all_actuals, all_times, all_mae, all_mse, all_r2, output_dir):
+def generate_final_combined_plot(data_df, all_predictions, all_actuals, all_times, all_mae, all_rmse, all_r2, output_dir):
     """
     Generate a final combined plot for actual vs predicted data across all windows,
     with improved readability (e.g., formatted x-axis for years).
@@ -183,12 +281,12 @@ def generate_final_combined_plot(data_df, all_predictions, all_actuals, all_time
     # Add overall metrics
     total_time = sum(all_times)
     avg_mae = np.mean(all_mae)
-    avg_mse = np.mean(all_mse)
+    avg_rmse = np.mean(all_rmse)
     avg_r2 = np.mean(all_r2)
     plt.text(
         0.05,
         0.95,
-        f"Avg MAE: {avg_mae:.3f}\nAvg MSE: {avg_mse:.3f}\nAvg R²: {avg_r2:.3f}\nTotal Time: {total_time:.2f}s",
+        f"Avg MAE: {avg_mae:.3f}\nAvg RMSE: {avg_rmse:.3f}\nAvg R²: {avg_r2:.3f}\nTotal Time: {total_time:.2f}s",
         transform=plt.gca().transAxes,
         fontsize=10,
         verticalalignment="top",
@@ -203,12 +301,12 @@ def generate_final_combined_plot(data_df, all_predictions, all_actuals, all_time
 
 
         
-def generate_metric_trend_plots(all_mae, all_mse, all_r2, output_dir):
+def generate_metric_trend_plots(all_mae, all_rmse, all_r2, output_dir):
     """
-    Generate metric trend plots for MAE, MSE, and R² across all windows.
+    Generate metric trend plots for MAE, rmse, and R² across all windows.
     """
-    metric_names = ['Mean Absolute Error (MAE)', 'Mean Squared Error (MSE)', 'R² Score']
-    metric_values = [all_mae, all_mse, all_r2]
+    metric_names = ['Mean Absolute Error (MAE)', 'Mean Squared Error (rmse)', 'R² Score']
+    metric_values = [all_mae, all_rmse, all_r2]
 
     for metric, values in zip(metric_names, metric_values):
         plt.figure(figsize=(12, 6))
@@ -227,7 +325,7 @@ def boosting_pipeline(data_df, model_name, output_dir, base_model=None, n_estima
     os.makedirs(output_dir, exist_ok=True)
     expanding_window = ExpandingWindowByYear(data_df, initial_train_years=53, test_years=1, result_columns=["Close"])
     window_num = 1
-    all_mae, all_mse, all_r2, all_times = [], [], [], []
+    all_mae, all_rmse, all_r2, all_times = [], [], [], []
     all_actuals, all_predictions = [], []
     all_weights = []  # Store weak learner weights for all windows
     all_importances = []  # Store feature importance for all windows
@@ -245,15 +343,18 @@ def boosting_pipeline(data_df, model_name, output_dir, base_model=None, n_estima
             # Dynamically configure base model if required
             if model_name == "NeuralNetwork":
                 input_dim = X_train.shape[1]
-                base_model = create_nn_base_model(input_dim)
+                base_model = KerasRegressorWrapper(input_dim=input_dim)
+
             elif model_name == "AdditiveModel":
                 base_model = create_additive_base_model()
 
             # Train and evaluate
             start_time = time.time()
-            boosting_model, y_pred, mae, mse, r2 = train_and_evaluate_boosting(
-                X_train.values, y_train.values.ravel(), X_test.values, y_test.values, base_model, n_estimators, learning_rate
+            boosting_model, y_pred, mae, rmse, r2 = train_and_evaluate_boosting(
+                X_train.values, y_train.values.ravel(), X_test.values, y_test.values,
+                base_model, n_estimators, learning_rate
             )
+
             elapsed_time = time.time() - start_time
 
             # Analyze weak learner weights (pass the AdaBoostRegressor model)
@@ -269,12 +370,13 @@ def boosting_pipeline(data_df, model_name, output_dir, base_model=None, n_estima
                 all_importances.append(importance)
 
             # Save window-specific plot
-            save_window_plot(window_num, y_train.values.ravel(), y_test.values.ravel(), y_pred,
-                             mae, mse, r2, elapsed_time, output_dir, model_name)
+            save_window_plot(window_num, y_train.values.ravel(), y_test.values.ravel(), y_pred, 
+                             mae, rmse, r2, elapsed_time, output_dir, model_name)
+
 
             # Store metrics
             all_mae.append(mae)
-            all_mse.append(mse)
+            all_rmse.append(rmse)
             all_r2.append(r2)
             all_times.append(elapsed_time)
             all_actuals.extend(y_test.values.ravel())
@@ -293,17 +395,15 @@ def boosting_pipeline(data_df, model_name, output_dir, base_model=None, n_estima
 
     # Generate final combined plot
     # After processing all windows
-    generate_final_combined_plot(data_df, all_predictions, all_actuals, all_times, all_mae, all_mse, all_r2, output_dir)
-
-
+    generate_final_combined_plot(data_df, all_predictions, all_actuals, all_times, all_mae, all_rmse, all_r2, output_dir)
 
     # Generate metric trend plots
-    generate_metric_trend_plots(all_mae, all_mse, all_r2, output_dir)
+    generate_metric_trend_plots(all_mae, all_rmse, all_r2, output_dir)
 
     # Generate final aggregate graphs after all windows
     generate_final_aggregate_graphs(output_dir, model_name, all_weights, all_importances)
 
-    return all_mae, all_mse, all_r2, sum(all_times), all_predictions, all_actuals
+    return all_mae, all_rmse, all_r2, sum(all_times), all_predictions, all_actuals
 
 # --------------- Comparison Function --------------- #
 
@@ -328,7 +428,7 @@ def compare_models(models_metrics, all_predictions, all_actuals, all_dates, outp
     plt.close()
 
     # Metric Comparison
-    for metric_name, idx in zip(["MAE", "MSE", "R²"], range(3)):
+    for metric_name, idx in zip(["MAE", "RMSE", "R²"], range(3)):
         metric_values = [np.mean(metrics[idx]) for metrics in models_metrics.values()]
         model_names = list(models_metrics.keys())
         plt.figure(figsize=(8, 6))
@@ -360,10 +460,10 @@ if __name__ == "__main__":
 
     models = [
         ("NeuralNetwork", None),  # Dynamic base model
-        ("AdditiveModel", None),  # Dynamic base model
         ("RandomForest", RandomForestRegressor(n_estimators=100, max_depth=None, random_state=42)),
         ("LinearRegression", LinearRegression()),
         ("SVR", SVR(kernel='linear')),
+        ("AdditiveModel", None),  # Dynamic base model
     ]
 
     models_metrics = {}
@@ -375,11 +475,11 @@ if __name__ == "__main__":
         print(f"Running BOOSTING with {model_name}...")
         model_output_dir = os.path.join(base_output_dir, model_name)
 
-        mae, mse, r2, total_time, predictions, actuals = boosting_pipeline(
+        mae, rmse, r2, total_time, predictions, actuals = boosting_pipeline(
             data_df, model_name, model_output_dir, base_model=base_model
         )
 
-        models_metrics[model_name] = (mae, mse, r2)
+        models_metrics[model_name] = (mae, rmse, r2)
         all_predictions[model_name] = predictions
         if all_actuals is None:
             all_actuals = actuals
