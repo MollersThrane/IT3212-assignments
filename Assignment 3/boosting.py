@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
+from sklearn.preprocessing import PolynomialFeatures
 import numpy as np
 import time
 
@@ -14,8 +15,10 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Input
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.optimizers import Adam
+from sklearn.pipeline import make_pipeline
 from pygam import LinearGAM, s
-
+from statsmodels.gam.api import GLMGam, BSplines
+from sklearn.base import BaseEstimator, RegressorMixin
 
 # --------------- Custom Base Models for Boosting --------------- #
 
@@ -79,50 +82,116 @@ from pygam import LinearGAM, s
 from sklearn.base import BaseEstimator, RegressorMixin
 import numpy as np
 
-class LinearGAMWrapper(BaseEstimator, RegressorMixin):
-    def __init__(self, terms=None, max_iter=100, tol=0.0001, lam=1.0):
-        self.terms = terms if terms else s(0)  # Default to spline on the first feature
-        self.max_iter = max_iter
-        self.tol = tol
-        self.lam = lam
-        self.model = None
+# class LinearGAMWrapper(BaseEstimator, RegressorMixin):
+#     def __init__(self, n_features, lam=1.0):
+#         self.n_features = n_features
+#         self.lam = lam
+#         self.model = None
 
-    def _ensure_2d_array(self, X):
-        """Ensure input is a dense, 2D numpy array."""
-        if hasattr(X, "toarray"):  # Convert sparse matrices to dense
-            X = X.toarray()
-        if X.ndim == 1:  # Convert 1D arrays to 2D
-            X = X.reshape(-1, 1)
-        return np.array(X)
+#     def fit(self, X, y):
+#         X = self._ensure_2d_array(X)
+#         terms = sum([s(i) for i in range(self.n_features)])  # Additive terms for all features
+#         self.model = LinearGAM(terms).fit(X, y)
+#         self.model.lam = self.lam
+#         return self
 
-    def fit(self, X, y):
-        X = self._ensure_2d_array(X)  # Ensure X is in the correct format
-        self.model = LinearGAM(self.terms, max_iter=self.max_iter, tol=self.tol)
-        self.model.lam = self.lam  # Set lambda regularization
-        self.model.fit(X, y)
-        return self
+#     def predict(self, X):
+#         X = self._ensure_2d_array(X)
+#         return self.model.predict(X)
 
-    def predict(self, X):
-        X = self._ensure_2d_array(X)  # Ensure X is in the correct format
-        if not self.model:
-            raise ValueError("Model must be fit before prediction.")
-        return self.model.predict(X)
+#     def _ensure_2d_array(self, X):
+#         if X.ndim == 1:
+#             X = X.reshape(-1, 1)
+#         return np.array(X)
 
-    def get_params(self, deep=True):
-        return {
-            'terms': self.terms,
-            'max_iter': self.max_iter,
-            'tol': self.tol,
-            'lam': self.lam
-        }
+#     def get_params(self, deep=True):
+#         return {'n_features': self.n_features, 'lam': self.lam}
 
-    def set_params(self, **params):
-        for key, value in params.items():
-            setattr(self, key, value)
-        return self
+#     def set_params(self, **params):
+#         for key, value in params.items():
+#             setattr(self, key, value)
+#         return self
 
-def create_additive_base_model():
-    return LinearGAMWrapper(terms=s(0), lam=1.0)
+
+# def create_additive_base_model():
+#     return LinearGAMWrapper(terms=s(0), lam=1.0)
+
+# Below was an attempt to use the Statsmodels GAM API, but it is not fully supported for this purpose.
+# class StatsmodelsGAMWrapper(BaseEstimator, RegressorMixin):
+#     def __init__(self, n_features, df=10):
+#         self.n_features = n_features
+#         self.df = df
+#         self.model = None
+
+#     def fit(self, X, y):
+#         X = np.asarray(X)
+#         y = np.asarray(y)
+#         # Generate spline bases for all features
+#         spline_basis = BSplines(X, df=[self.df] * self.n_features, degree=[3] * self.n_features)
+#         self.model = GLMGam(y, smoother=spline_basis).fit()
+#         return self
+
+#     def predict(self, X):
+#         return self.model.predict(X)
+
+#     def get_params(self, deep=True):
+#         return {'n_features': self.n_features, 'df': self.df}
+
+#     def set_params(self, **params):
+#         for key, value in params.items():
+#             setattr(self, key, value)
+#         return self
+
+#below implements additive model without using the Statsmodels GAM:
+#implementaion:
+# class additive_model(BaseEstimator, RegressorMixin):
+#     def __init__(self, n_features, df=10):
+#         self.n_features = n_features
+#         self.df = df
+#         self.model = None
+
+#     def fit(self, x, y):
+#         X = np.asarray(x)
+#         y = np.asarray(y)
+#         # Generate spline bases for all features
+#         spline_basis = BSplines(x, df=[self.df] * self.n_features, degree=[3] * self.n_features)
+#         self.model = GLMGam(y, smoother=spline_basis).fit()
+#         return self
+
+#     def predict(self, x):
+#         return self.model.predict(x)
+
+#     def get_params(self, deep=True):
+#         return {'n_features': self.n_features, 'df': self.df}
+
+#     def set_params(self, **params):
+#         for key, value in params.items():
+#             setattr(self, key, value)
+#         return self
+
+
+# additive_model = make_pipeline(PolynomialFeatures(degree=2), LinearRegression())
+# class additive_model(BaseEstimator, RegressorMixin):
+#     def __init__(self):
+#         self.model = None
+
+#     def fit(self, X, y):
+#         self.model = LinearGAM(s(0) + s(1) + s(2) + s(3) + s(4) + s(5) + s(6)).fit(X, y)
+#         return self
+
+#     def predict(self, X):
+#         return self.model.predict(X)
+
+#     def get_params(self, deep=True):
+#         return {}
+
+#     def set_params(self, **params):
+#         return self
+        
+# --------------- Custom Base Models for Boosting --------------- #
+
+
+
 
 
 
@@ -133,38 +202,76 @@ def train_and_evaluate_boosting(X_train, y_train, X_test, y_test, base_model, n_
     model = AdaBoostRegressor(estimator=base_model, n_estimators=n_estimators, learning_rate=learning_rate, random_state=42)
     model.fit(X_train, y_train.ravel())
     y_pred = model.predict(X_test)
+    
+    # Calculate metrics
     mae = mean_absolute_error(y_test, y_pred)
-    # rmse = mean_squared_error(y_test, y_pred)
+    # Calculate MAPE (avoid division by zero)
+    mape = np.mean(np.abs((y_test - y_pred) / np.maximum(np.abs(y_test), np.finfo(float).eps)))
     rmse = root_mean_squared_error(y_test, y_pred)
     r2 = r2_score(y_test, y_pred)
-    return model, y_pred, mae, rmse, r2
+    
+
+    return model, y_pred, mae, mape, rmse, r2
 
 
-def save_window_plot(window_num, train_data, test_actual, test_predicted, mae, rmse, r2, elapsed_time, output_dir, model_name):
+
+# Below window plot function includes training period, test period, and metrics.
+# def save_window_plot(window_num, train_data, test_actual, test_predicted, mae, rmse, r2, elapsed_time, output_dir, model_name):
+#     """
+#     Save plot for a specific window.
+#     """
+#     plt.figure(figsize=(12, 6))
+#     plt.plot(range(len(train_data)), train_data, label='Training Data', color='blue')
+#     plt.plot(range(len(train_data), len(train_data) + len(test_actual)), test_actual, label='Actual Test Data', color='green')
+#     plt.plot(range(len(train_data), len(train_data) + len(test_predicted)), test_predicted, label='Predicted Test Data', color='orange')
+
+#     plt.title(f"{model_name} - Window {window_num}")
+#     plt.xlabel("Days")
+#     plt.ylabel("Close Price")
+#     plt.legend()
+#     plt.grid()
+
+#     # Annotate with metrics
+#     plt.text(0.05, 0.95, f"MAE: {mae:.3f}\nRMSE: {rmse:.3f}\nR²: {r2:.3f}\nTime: {elapsed_time:.2f}s",
+#          transform=plt.gca().transAxes, fontsize=10, verticalalignment='top',
+#          bbox=dict(facecolor='white', alpha=0.5))
+
+
+#     # Save the plot
+#     os.makedirs(output_dir, exist_ok=True)
+#     plt.savefig(os.path.join(output_dir, f"window_{window_num}.png"))
+#     plt.close()
+
+# Below window plot function includes only the test period and metrics.
+def save_window_plot(window_num, test_actual, test_predicted, mae, rmse, mape, r2, elapsed_time, output_dir, model_name):
     """
-    Save plot for a specific window.
+    Save plot for a specific window showing only the test period.
     """
     plt.figure(figsize=(12, 6))
-    plt.plot(range(len(train_data)), train_data, label='Training Data', color='blue')
-    plt.plot(range(len(train_data), len(train_data) + len(test_actual)), test_actual, label='Actual Test Data', color='green')
-    plt.plot(range(len(train_data), len(train_data) + len(test_predicted)), test_predicted, label='Predicted Test Data', color='orange')
 
-    plt.title(f"{model_name} - Window {window_num}")
-    plt.xlabel("Days")
+    # Plot actual test data
+    plt.plot(range(len(test_actual)), test_actual, label='Actual Test Data', color='green')
+    
+    # Plot predicted test data
+    plt.plot(range(len(test_predicted)), test_predicted, label='Predicted Test Data', color='orange')
+
+    # Add title and labels
+    plt.title(f"{model_name} - Window {window_num} (Test Period Only)")
+    plt.xlabel("Test Period (Days)")
     plt.ylabel("Close Price")
     plt.legend()
     plt.grid()
 
     # Annotate with metrics
-    plt.text(0.05, 0.95, f"MAE: {mae:.3f}\nRMSE: {rmse:.3f}\nR²: {r2:.3f}\nTime: {elapsed_time:.2f}s",
-         transform=plt.gca().transAxes, fontsize=10, verticalalignment='top',
-         bbox=dict(facecolor='white', alpha=0.5))
-
+    plt.text(0.05, 0.95, f"MAE: {mae:.3f}\nMAPE: {mape:.3f}\nRMSE: {rmse:.3f}\nR²: {r2:.3f}\nTime: {elapsed_time:.2f}s",
+             transform=plt.gca().transAxes, fontsize=10, verticalalignment='top',
+             bbox=dict(facecolor='white', alpha=0.5))
 
     # Save the plot
     os.makedirs(output_dir, exist_ok=True)
-    plt.savefig(os.path.join(output_dir, f"window_{window_num}.png"))
+    plt.savefig(os.path.join(output_dir, f"window_{window_num}_test_only.png"))
     plt.close()
+
 
 def analyze_weak_learner_weights(boosting_model, output_dir, model_name, window_num):
     """
@@ -244,7 +351,7 @@ def generate_final_aggregate_graphs(output_dir, model_name, all_weights, all_imp
         plt.savefig(os.path.join(output_dir, f"{model_name}_final_feature_importance.png"))
         plt.close()
         
-def generate_final_combined_plot(data_df, all_predictions, all_actuals, all_times, all_mae, all_rmse, all_r2, output_dir):
+def generate_final_combined_plot(data_df, all_predictions, all_actuals, all_times, all_mae, all_mape, all_rmse, all_r2, output_dir):
     """
     Generate a final combined plot for actual vs predicted data across all windows,
     with improved readability (e.g., formatted x-axis for years).
@@ -282,11 +389,12 @@ def generate_final_combined_plot(data_df, all_predictions, all_actuals, all_time
     total_time = sum(all_times)
     avg_mae = np.mean(all_mae)
     avg_rmse = np.mean(all_rmse)
+    avg_mape = np.mean(all_mape)
     avg_r2 = np.mean(all_r2)
     plt.text(
         0.05,
         0.95,
-        f"Avg MAE: {avg_mae:.3f}\nAvg RMSE: {avg_rmse:.3f}\nAvg R²: {avg_r2:.3f}\nTotal Time: {total_time:.2f}s",
+        f"Avg MAE: {avg_mae:.3f}\nAvg MAPE: {avg_mape:.3f}\nAvg RMSE: {avg_rmse:.3f}\nAvg R²: {avg_r2:.3f}\nTotal Time: {total_time:.2f}s",
         transform=plt.gca().transAxes,
         fontsize=10,
         verticalalignment="top",
@@ -298,47 +406,154 @@ def generate_final_combined_plot(data_df, all_predictions, all_actuals, all_time
     plt.savefig(os.path.join(output_dir, "final_combined_plot.png"))
     plt.close()
 
-
-
-        
-def generate_metric_trend_plots(all_mae, all_rmse, all_r2, output_dir):
+def generate_test_period_plot(test_dates, all_actuals, all_predictions, output_dir, model_name=None, mae=None, rmse=None, r2=None, mape=None, elapsed_time=None):
     """
-    Generate metric trend plots for MAE, rmse, and R² across all windows.
+    Generate a plot for only the test period actual vs. predicted data, including metrics.
     """
-    metric_names = ['Mean Absolute Error (MAE)', 'Mean Squared Error (rmse)', 'R² Score']
-    metric_values = [all_mae, all_rmse, all_r2]
+    plt.figure(figsize=(12, 6))
 
-    for metric, values in zip(metric_names, metric_values):
-        plt.figure(figsize=(12, 6))
-        plt.plot(range(1, len(values) + 1), values, marker='o', label=metric, color='red')
-        plt.title(f"Metric Trend - {metric}")
-        plt.xlabel("Expanding Window Number")
-        plt.ylabel(metric)
-        plt.legend()
-        plt.grid()
-        os.makedirs(output_dir, exist_ok=True)
-        plt.savefig(os.path.join(output_dir, f"{metric.replace(' ', '_')}_trend.png"))
-        plt.close()
+    # Plot actual test data
+    plt.plot(test_dates, all_actuals, label="Actual Data", color="green", alpha=0.6)
+
+    # Handle multiple models for comparison or single model for individual plots
+    if isinstance(all_predictions, dict):  # Multiple models (comparison plot)
+        for model, predictions in all_predictions.items():
+            plt.plot(test_dates, predictions, label=f"Predicted ({model})", alpha=0.8)
+    else:  # Single model
+        plt.plot(test_dates, all_predictions, label="Predicted Data", color="orange", alpha=0.8)
+
+    # Add title and labels
+    title = f"Test-Period: Actual vs Predicted Close Prices"
+    if model_name:
+        title += f" - {model_name}"
+    plt.title(title)
+    plt.xlabel("Date")
+    plt.ylabel("Close Price")
+    plt.legend()
+    plt.grid()
+
+    # Annotate metrics on the plot (only for single model)
+    if mae is not None and mape is not None and rmse is not None and r2 is not None and mape is not None and elapsed_time is not None and not isinstance(all_predictions, dict):
+        plt.text(
+            0.05,
+            0.95,
+            f"MAE: {mae:.3f}\nMAPE: {mape:.3f}\nRMSE: {rmse:.3f}\nR²: {r2:.3f}\nTime: {elapsed_time:.2f}s",
+            transform=plt.gca().transAxes,
+            fontsize=10,
+            verticalalignment="top",
+            bbox=dict(facecolor="white", alpha=0.5),
+        )
+
+    # Format x-axis for date display
+    plt.gca().xaxis.set_major_locator(plt.matplotlib.dates.YearLocator(1))
+    plt.gca().xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%Y'))
+
+    # Save the plot
+    os.makedirs(output_dir, exist_ok=True)
+    file_name = f"test_period_plot.png" if not model_name else f"test_period_plot_{model_name}.png"
+    plt.savefig(os.path.join(output_dir, file_name))
+    plt.close()
+
+
+
+
+
+
+
+
+
+# Below uses a window-based x-axis for metric trend plots rather than year-based x-axis.
+# def generate_metric_trend_plots(all_mae, all_rmse, all_r2, output_dir):
+#     """
+#     Generate metric trend plots for MAE, rmse, and R² across all windows.
+#     """
+#     metric_names = ['Mean Absolute Error (MAE)', 'Mean Squared Error (rmse)', 'R² Score']
+#     metric_values = [all_mae, all_rmse, all_r2]
+
+#     for metric, values in zip(metric_names, metric_values):
+#         plt.figure(figsize=(12, 6))
+#         plt.plot(range(1, len(values) + 1), values, marker='o', label=metric, color='red')
+#         plt.title(f"Metric Trend - {metric}")
+#         plt.xlabel("Expanding Window Number")
+#         plt.ylabel(metric)
+#         plt.legend()
+#         plt.grid()
+#         os.makedirs(output_dir, exist_ok=True)
+#         plt.savefig(os.path.join(output_dir, f"{metric.replace(' ', '_')}_trend.png"))
+#         plt.close()
+
+# below uses year-based x-axis for metric trend plots rather than window-based x-axis.
+def generate_combined_metric_trend_plot(all_metrics, output_dir, years):
+    """
+    Generate a single combined metric trend plot for MAE, MAPE, RMSE, and R² across all windows with test-year-based x-axis.
+    """
+    # Unpack metrics
+    all_mae, all_mape, all_rmse, all_r2 = all_metrics
+
+    # Ensure `years` is a list of integers
+    years = list(map(int, years))  # Convert all year values to integers if not already
+
+    # Create a combined plot
+    plt.figure(figsize=(12, 6))
+    plt.plot(years, all_mae, label='MAE', marker='o')
+    plt.plot(years, all_mape, label='MAPE', marker='o')
+    plt.plot(years, all_rmse, label='RMSE', marker='o')
+    plt.plot(years, all_r2, label='R²', marker='o')
+
+    plt.title("Combined Metric Trend (Test Periods)")
+    plt.xlabel("Year")
+    plt.ylabel("Metrics")
+    plt.legend()
+    plt.grid()
+
+    # Set x-axis ticks as integers
+    plt.xticks(ticks=years, labels=[str(year) for year in years])
+
+    # Save the plot
+    os.makedirs(output_dir, exist_ok=True)
+    plt.savefig(os.path.join(output_dir, "combined_metric_trend.png"))
+    plt.close()
+
+
+
 
 
 def boosting_pipeline(data_df, model_name, output_dir, base_model=None, n_estimators=50, learning_rate=1.0):
     os.makedirs(output_dir, exist_ok=True)
-    expanding_window = ExpandingWindowByYear(data_df, initial_train_years=53, test_years=1, result_columns=["Close"])
+    
+    # Calculate total years present in the dataset
+    total_years = data_df['Date'].dt.year.max() - data_df['Date'].dt.year.min() + 1
+    # Set initial train years to 80% of the total years, leaving 20% for testing
+    initial_train_years = int(total_years * 0.8)  # Set initial train years to 80% of the total years
+    # initial_train_years = int(total_years - 4)  # Set initial train years to 80% of the total years
+    
+    expanding_window = ExpandingWindowByYear(data_df, initial_train_years=initial_train_years, test_years=1, result_columns=["Close"])
     window_num = 1
-    all_mae, all_rmse, all_r2, all_times = [], [], [], []
+    all_mae, all_mape, all_rmse, all_r2, all_times = [], [], [], [], []
     all_actuals, all_predictions = [], []
     all_weights = []  # Store weak learner weights for all windows
     all_importances = []  # Store feature importance for all windows
+    test_years = []  # Store the years corresponding to test periods
 
     while True:
         try:
             X_train, y_train, _ = expanding_window.train_window()
-            X_test, y_test, _ = expanding_window.test_window()
+            X_test, y_test, test_metadata = expanding_window.test_window()
 
             # Check if test window is empty
             if X_test.empty or y_test.empty:
                 print(f"Window {window_num}: Empty test window. Skipping remaining windows.")
                 break  # Exit the loop if there is no more test data
+
+            # Extract year from test dataset or fallback to data_df
+            if "Date" in X_test.columns:
+                test_year = pd.to_datetime(X_test["Date"].iloc[0]).year
+            elif not y_test.empty:
+                test_year = pd.to_datetime(data_df.iloc[y_test.index[0]]["Date"]).year
+            else:
+                raise ValueError(f"Unable to extract year for window {window_num}.")
+
+            test_years.append(int(test_year))  # Ensure the year is stored as an integer
 
             # Dynamically configure base model if required
             if model_name == "NeuralNetwork":
@@ -346,11 +561,12 @@ def boosting_pipeline(data_df, model_name, output_dir, base_model=None, n_estima
                 base_model = KerasRegressorWrapper(input_dim=input_dim)
 
             elif model_name == "AdditiveModel":
-                base_model = create_additive_base_model()
+                additive_model = make_pipeline(PolynomialFeatures(degree=2), LinearRegression())
+                base_model = additive_model
 
             # Train and evaluate
             start_time = time.time()
-            boosting_model, y_pred, mae, rmse, r2 = train_and_evaluate_boosting(
+            boosting_model, y_pred, mae, mape, rmse, r2 = train_and_evaluate_boosting(
                 X_train.values, y_train.values.ravel(), X_test.values, y_test.values,
                 base_model, n_estimators, learning_rate
             )
@@ -370,12 +586,12 @@ def boosting_pipeline(data_df, model_name, output_dir, base_model=None, n_estima
                 all_importances.append(importance)
 
             # Save window-specific plot
-            save_window_plot(window_num, y_train.values.ravel(), y_test.values.ravel(), y_pred, 
-                             mae, rmse, r2, elapsed_time, output_dir, model_name)
-
+            # Save window-specific plot for the test period only
+            save_window_plot(window_num, y_test.values.ravel(), y_pred, mae, mape, rmse, r2, elapsed_time, output_dir, model_name)
 
             # Store metrics
             all_mae.append(mae)
+            all_mape.append(mape)
             all_rmse.append(rmse)
             all_r2.append(r2)
             all_times.append(elapsed_time)
@@ -386,49 +602,62 @@ def boosting_pipeline(data_df, model_name, output_dir, base_model=None, n_estima
             window_num += 1
 
         except ValueError as ve:
-            # Handle empty test data gracefully
-            print(f"ValueError encountered: {ve}")
+            print(f"ValueError encountered in window {window_num}: {ve}")
             break
         except IndexError:
             print("No more windows to process.")
             break
 
     # Generate final combined plot
-    # After processing all windows
-    generate_final_combined_plot(data_df, all_predictions, all_actuals, all_times, all_mae, all_rmse, all_r2, output_dir)
+    generate_final_combined_plot(data_df, all_predictions, all_actuals, all_times, all_mae, all_mape, all_rmse, all_r2, output_dir)
 
-    # Generate metric trend plots
-    generate_metric_trend_plots(all_mae, all_rmse, all_r2, output_dir)
+    # Generate metric trend plots with test years
+    generate_combined_metric_trend_plot(
+        (all_mae, all_mape, all_rmse, all_r2), output_dir, test_years
+    )
 
     # Generate final aggregate graphs after all windows
     generate_final_aggregate_graphs(output_dir, model_name, all_weights, all_importances)
 
-    return all_mae, all_rmse, all_r2, sum(all_times), all_predictions, all_actuals
+    return all_mae, all_mape, all_rmse, all_r2, sum(all_times), all_predictions, all_actuals
+
+
+
 
 # --------------- Comparison Function --------------- #
 
-def compare_models(models_metrics, all_predictions, all_actuals, all_dates, output_dir):
+def compare_models(models_metrics, all_predictions, all_actuals, all_dates, output_dir, total_times):
     """
-    Generate comparison graphs for all models.
+    Generate comparison graphs for all models, including time spent.
     """
     comparison_dir = os.path.join(output_dir, "comparison")
     os.makedirs(comparison_dir, exist_ok=True)
 
-    # Final combined plot
+    # Extract the test range of dates based on the length of all_actuals
+    test_dates = all_dates[-len(all_actuals):]
+
+    # Final combined plot for actual vs predicted
     plt.figure(figsize=(12, 6))
-    plt.plot(all_dates, all_actuals, label="Actual Data", color="green", alpha=0.6)
+    plt.plot(test_dates, all_actuals, label="Actual Data", color="green", alpha=0.6)
     for model_name, predictions in all_predictions.items():
-        plt.plot(all_dates[-len(predictions):], predictions, label=f"Predicted ({model_name})", alpha=0.8)
+        plt.plot(test_dates, predictions, label=f"Predicted ({model_name})", alpha=0.8)
+
+    # Format x-axis to display years as integers
+    plt.gca().xaxis.set_major_locator(plt.matplotlib.dates.YearLocator(1))
+    plt.gca().xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%Y'))
+
     plt.title("Actual vs Predicted Close Prices (All Models)")
     plt.xlabel("Year")
     plt.ylabel("Close Price")
     plt.legend()
     plt.grid()
+
+    # Save the combined plot
     plt.savefig(os.path.join(comparison_dir, "predicted_vs_actual_all_models.png"))
     plt.close()
 
     # Metric Comparison
-    for metric_name, idx in zip(["MAE", "RMSE", "R²"], range(3)):
+    for metric_name, idx in zip(["MAE", "MAPE", "RMSE", "R²"], range(3)):
         metric_values = [np.mean(metrics[idx]) for metrics in models_metrics.values()]
         model_names = list(models_metrics.keys())
         plt.figure(figsize=(8, 6))
@@ -439,6 +668,19 @@ def compare_models(models_metrics, all_predictions, all_actuals, all_dates, outp
         plt.grid(axis="y")
         plt.savefig(os.path.join(comparison_dir, f"{metric_name.lower()}_comparison.png"))
         plt.close()
+
+    # Time Comparison
+    plt.figure(figsize=(8, 6))
+    plt.bar(list(total_times.keys()), list(total_times.values()), color='orange')
+    plt.title("Time Spent Comparison")
+    plt.xlabel("Model")
+    plt.ylabel("Total Time (seconds)")
+    plt.grid(axis="y")
+    plt.savefig(os.path.join(comparison_dir, "time_comparison.png"))
+    plt.close()
+
+
+
 
 
 # --------------- Main Script --------------- #
@@ -459,30 +701,61 @@ if __name__ == "__main__":
     base_output_dir = "./Plots/boosting"
 
     models = [
-        ("NeuralNetwork", None),  # Dynamic base model
-        ("RandomForest", RandomForestRegressor(n_estimators=100, max_depth=None, random_state=42)),
         ("LinearRegression", LinearRegression()),
-        ("SVR", SVR(kernel='linear')),
         ("AdditiveModel", None),  # Dynamic base model
+        ("RandomForest", RandomForestRegressor(n_estimators=100, max_depth=None, random_state=42)),
+        ("NeuralNetwork", None),  # Dynamic base model
+        ("SVR", SVR(kernel='linear')),
     ]
 
     models_metrics = {}
     all_predictions = {}
     all_actuals = None
     all_dates = data_df["Date"]
+    total_times = {}  # Store time spent for each model
 
     for model_name, base_model in models:
         print(f"Running BOOSTING with {model_name}...")
         model_output_dir = os.path.join(base_output_dir, model_name)
 
-        mae, rmse, r2, total_time, predictions, actuals = boosting_pipeline(
+        # Run boosting pipeline and collect metrics, predictions, and actuals
+        mae, mape, rmse, r2, total_time, predictions, actuals = boosting_pipeline(
             data_df, model_name, model_output_dir, base_model=base_model
         )
 
-        models_metrics[model_name] = (mae, rmse, r2)
+        models_metrics[model_name] = (mae, mape, rmse, r2)
         all_predictions[model_name] = predictions
+        total_times[model_name] = total_time  # Save total time for comparison
+
         if all_actuals is None:
             all_actuals = actuals
 
+        # Extract test dates specific to this model
+        test_dates = all_dates[-len(actuals):]
+
+        # Generate test-only plot for the current model
+        # Inside the loop for each model
+        generate_test_period_plot(
+            test_dates=test_dates,                # Test dates
+            all_actuals=actuals,                  # Actual values
+            all_predictions=predictions,          # Predicted values
+            output_dir=model_output_dir,          # Output directory
+            model_name=model_name,                # Model name
+            mae=np.mean(mae),                     # Mean MAE
+            mape=np.mean(mape),                   # Mean MAPE
+            rmse=np.mean(rmse),                   # Mean RMSE
+            r2=np.mean(r2),                       # Mean R²
+            elapsed_time=total_time               # Elapsed time for this model
+        )
+
+
+
+
     # Generate comparison plots
-    compare_models(models_metrics, all_predictions, all_actuals, all_dates, base_output_dir)
+    compare_models(models_metrics, all_predictions, all_actuals, all_dates, base_output_dir, total_times)
+
+    
+    # Generate a comparison test-period plot
+    test_dates = all_dates[-len(all_actuals):]
+    generate_test_period_plot(test_dates, all_actuals, all_predictions, os.path.join(base_output_dir, "comparison"))
+
