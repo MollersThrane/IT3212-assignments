@@ -48,6 +48,13 @@ def main():
     # Load preprocessed data
     data_df = pd.read_csv('./Datasets/preprocessed_stock_data.csv')
 
+    # Ensure 'Date' is in datetime format
+    if not pd.api.types.is_datetime64_any_dtype(data_df['Date']):
+        data_df['Date'] = pd.to_datetime(data_df['Date'], errors='coerce')
+
+    # Drop rows with invalid dates
+    data_df = data_df.dropna(subset=['Date'])
+
     # Initialize the expanding window
     ew = ExpandingWindowByYear(
         data_df, initial_train_years=1, test_years=1, result_columns=["Close"]
@@ -108,8 +115,17 @@ def main():
         label="Predicted Data", color="orange", alpha=0.8
     )
 
+    # Format the x-axis to show only selected years
+    years = data_df['Date'].dt.year
+    start_year, end_year = years.min(), years.max()
+    year_range = end_year - start_year + 1
+    max_labels = 10
+    interval = max(1, year_range // max_labels)
+    plt.gca().xaxis.set_major_locator(plt.matplotlib.dates.YearLocator(interval))
+    plt.gca().xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%Y'))
+
     plt.title("Random Forest - Combined Actual vs Predicted Close Prices")
-    plt.xlabel("Date")
+    plt.xlabel("Year")
     plt.ylabel("Close Price")
     plt.legend()
     plt.grid()
